@@ -24,22 +24,26 @@ if "authenticated" not in st.session_state:
     st.session_state.user = ""
 
 if not st.session_state.authenticated:
-    with st.form("login_form"):
-        st.markdown("### 🔐 Iniciar sesión")
-        email    = st.text_input("Correo electrónico")
-        password = st.text_input("Contraseña", type="password")
-        submit   = st.form_submit_button("Ingresar")
-        if submit:
-            users = st.secrets["users"]
-            key   = email.lower()
-            if key in users and password == users[key]:
-                st.session_state.authenticated = True
-                st.session_state.user = email.lower()
-                st.success(f"Bienvenido, {email} 👋")
-                st.experimental_rerun()
-            else:
-                st.error("Correo o contraseña incorrectos.")
-    st.stop()
+    # Creamos el form
+    form = st.form("login_form")
+    form.markdown("### 🔐 Iniciar sesión")
+    email    = form.text_input("Correo electrónico")
+    password = form.text_input("Contraseña", type="password")
+    submit   = form.form_submit_button("Ingresar")
+
+    if submit:
+        users = st.secrets["users"]
+        key   = email.lower()
+        if key in users and password == users[key]:
+            st.session_state.authenticated = True
+            st.session_state.user = key
+            st.success(f"Bienvenido, {email} 👋")
+        else:
+            st.error("Correo o contraseña incorrectos.")
+
+    # Si después de pulsar (o en primera carga) aún no está autenticado, detenemos todo
+    if not st.session_state.authenticated:
+        st.stop()
 
 # Sidebar: mostrar usuario y botón cerrar sesión
 st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
