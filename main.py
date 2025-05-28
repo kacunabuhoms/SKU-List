@@ -1,30 +1,22 @@
 import streamlit as st
 import pandas as pd
 import io
-import json
-
+import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
 
 # —————————————————————————————————————————
-# CONFIGURACIÓN GLOBAL
+# CONFIGURACIÓN DE LA PÁGINA
 # —————————————————————————————————————————
 st.set_page_config(page_title="🦉 Filtro de SKUs", layout="wide")
 
-# Constantes
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-GOOGLE_DRIVE_FILE_ID = "1ClVLffE7_MOdnPxGYvo1JN6tVdqNWI6L"
-
 # —————————————————————————————————————————
-# MULTIUSUARIO (login con st.secrets["users"])
+# LOGIN MULTIUSUARIO
 # —————————————————————————————————————————
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user = ""
 
 if not st.session_state.authenticated:
-    # Creamos el form
     form = st.form("login_form")
     form.markdown("### 🔐 Iniciar sesión")
     email    = form.text_input("Correo electrónico")
@@ -41,106 +33,119 @@ if not st.session_state.authenticated:
         else:
             st.error("Correo o contraseña incorrectos.")
 
-    # Si después de pulsar (o en primera carga) aún no está autenticado, detenemos todo
     if not st.session_state.authenticated:
         st.stop()
 
-# Sidebar: mostrar usuario y botón cerrar sesión
+# —————————————————————————————————————————
+# SIDEBAR: mostrar usuario y botón Cerrar sesión
+# —————————————————————————————————————————
 st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
     st.session_state.user = ""
     st.experimental_rerun()
 
-# Título principal
-st.title("🦉 Filtro de Lista de SKUs")
+# —————————————————————————————————————————
+# LECTURA DE SECRETS PARA GSPREAD & SHEETS
+# —————————————————————————————————————————
+creds_info   = st.secrets["credentials"]
+scopes       = st.secrets["SCOPES"]
+sheet_id     = st.secrets["SPREADSHEET_ID"]
 
 # —————————————————————————————————————————
-# AUTENTICACIÓN A GOOGLE DRIVE (cuenta de servicio)
+# CLIENTE DE GSPREAD
 # —————————————————————————————————————————
 @st.cache_resource(show_spinner=False)
-def get_drive_service():
-    creds_info = st.secrets["credentials"]  # dict directo
-    creds = Credentials.from_service_account_info(
-        creds_info,
-        scopes=SCOPES
-    )
-    service = build('drive', 'v3', credentials=creds)
-    return service
-
-def descargar_excel_drive(file_id: str) -> io.BytesIO:
-    service = get_drive_service()
-    request = service.files().get_media(fileId=file_id)
-    fh = io.BytesIO()
-    downloader = MediaIoBaseDownload(fh, request)
-    done = False
-    while not done:
-        _, done = downloader.next_chunk()
-    fh.seek(0)
-    return fh
+def get_gspread_client():
+    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    return gspread.authorize(creds)
 
 # —————————————————————————————————————————
-# CARGA Y PROCESAMIENTO
+# CARGAR DATOS DE LA HOJA
 # —————————————————————————————————————————
 @st.cache_data(show_spinner=False)
-def load_dataframe() -> pd.DataFrame:
-    buffer = descargar_excel_drive(GOOGLE_DRIVE_FILE_ID)
-    df_raw = pd.read_excel(buffer, sheet_name="LISTA SKU")
-    # Renombrar dinámico de columnas 1 y 2 si vienen sin nombre
-    cols = list(df_raw.columns)
-    if cols[1].startswith("Unnamed") and cols[2].startswith("Unnamed"):
-        df = df_raw.rename(columns={cols[1]:"Nombre Largo", cols[2]:"SKU"})[["Nombre Largo","SKU"]]
-    else:
-        raise ValueError("Columnas ‘Nombre Largo’ o ‘SKU’ no encontradas.")
-    # Limpiar filas vacías o cabeceras repetidas
-    df = df[df["SKU"].notna()]
-    df = df[df["Nombre Largo"].str.lower() != "nombre largo"]
-    return df
+def load_sheet_df(sheet_name: str) -> pd.DataFrame:
+    client = get_gspread_client()
+    ws     = client.open_by_key(sheet_id).worksheet(sheet_name)
+    records = ws.get_all_records()
+    return pd.DataFrame(records)
 
-# Botón para recargar manualmente
-if st.button("📥 Cargar y procesar datos desde Google Drive"):
-    load_dataframe.clear()
+# Botón para recargar datos manualmente
+if st.button("📥 Cargar y procesar datos desde Google Sheets"):
+    load_sheet_df.clear()
     st.success("✅ Datos recargados en memoria.")
 
-# Si ya cargó (o al primer acceso), mostramos filtros
+# Intentamos cargar la pestaña "LISTA SKU"
 try:
-    df = load_dataframe()
-    st.subheader("📋 Filtros")
-    col1, col2, col3, col4 = st.columns([3,2,2,2])
-    columns_map = {"Nombre Largo":"Nombre Largo","SKU":"SKU"}
-    with col1:
-        column_selection = st.selectbox("Columna", list(columns_map.keys()))
-    with col2:
-        f1 = st.text_input("Filtro 1").strip().lower()
-    with col3:
-        f2 = st.text_input("Filtro 2").strip().lower()
-    with col4:
-        f3 = st.text_input("Filtro 3").strip().lower()
-
-    def clean(text):
-        return str(text).lower().strip()
-    def passes_filters(text):
-        txt = clean(text)
-        return all(f in txt for f in [f1,f2,f3] if f)
-
-    sel_col     = columns_map[column_selection]
-    df_filtered = df[df[sel_col].apply(passes_filters)]
-
-    st.subheader("📈 Resultados filtrados")
-    st.write(f"Total encontrados: **{len(df_filtered)}**")
-    st.dataframe(df_filtered, use_container_width=True)
-
-    # Botón para descargar resultados
-    buffer2 = io.BytesIO()
-    with pd.ExcelWriter(buffer2, engine="xlsxwriter") as writer:
-        df_filtered.to_excel(writer, index=False, sheet_name="Filtrado")
-    buffer2.seek(0)
-    st.download_button(
-        label="📥 Descargar resultados",
-        data=buffer2,
-        file_name="filtrado_sku.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
+    df_raw = load_sheet_df("LISTA SKU")
 except Exception as e:
-    st.error(f"❌ Error al procesar datos: {e}")
+    st.error(f"❌ No se pudo leer la hoja: {e}")
+    st.stop()
+
+# —————————————————————————————————————————
+# PROCESAMIENTO INICIAL: renombrar columnas
+# —————————————————————————————————————————
+cols = list(df_raw.columns)
+if len(cols) >= 3 and cols[1].startswith("Unnamed") and cols[2].startswith("Unnamed"):
+    df = (
+        df_raw
+        .rename(columns={cols[1]:"Nombre Largo", cols[2]:"SKU"})
+        [["Nombre Largo","SKU"]]
+    )
+else:
+    # asumimos que ya vienen como "Nombre Largo" y "SKU"
+    df = df_raw[["Nombre Largo","SKU"]].copy()
+
+# limpiar filas vacías o cabeceras repetidas
+df = df[df["SKU"].notna()]
+df = df[df["Nombre Largo"].str.lower() != "nombre largo"]
+
+# —————————————————————————————————————————
+# INTERFAZ DE FILTRADO
+# —————————————————————————————————————————
+st.title("🦉 Filtro de Lista de SKUs")
+
+col1, col2, col3, col4 = st.columns([3,2,2,2])
+with col1:
+    column_selection = st.selectbox(
+        "Columna a filtrar",
+        ("Nombre Largo","SKU")
+    )
+with col2:
+    f1 = st.text_input("Filtro 1").strip().lower()
+with col3:
+    f2 = st.text_input("Filtro 2").strip().lower()
+with col4:
+    f3 = st.text_input("Filtro 3").strip().lower()
+
+def clean(text):
+    return str(text).lower().strip()
+
+def passes_filters(text):
+    t = clean(text)
+    return all(f in t for f in (f1,f2,f3) if f)
+
+sel_col     = column_selection
+df_filtered = df[df[sel_col].apply(passes_filters)]
+
+# —————————————————————————————————————————
+# MOSTRAR RESULTADOS
+# —————————————————————————————————————————
+st.subheader("📈 Resultados filtrados")
+st.write(f"Total encontrados: **{len(df_filtered)}**")
+st.dataframe(df_filtered, use_container_width=True)
+
+# —————————————————————————————————————————
+# DESCARGA DE RESULTADOS
+# —————————————————————————————————————————
+buffer = io.BytesIO()
+with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+    df_filtered.to_excel(writer, index=False, sheet_name="Filtrado")
+buffer.seek(0)
+
+st.download_button(
+    label="📥 Descargar resultados (.xlsx)",
+    data=buffer,
+    file_name="filtrado_sku.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
