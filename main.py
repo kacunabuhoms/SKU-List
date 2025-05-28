@@ -60,9 +60,9 @@ st.title("🦉 Filtro de Lista de SKUs")
 # —————————————————————————————————————————
 @st.cache_resource(show_spinner=False)
 def get_drive_service():
-    credentials_dict = json.loads(st.secrets["credentials_json"])
+    creds_info = st.secrets["credentials"]  # dict directo
     creds = Credentials.from_service_account_info(
-        credentials_dict,
+        creds_info,
         scopes=SCOPES
     )
     service = build('drive', 'v3', credentials=creds)
