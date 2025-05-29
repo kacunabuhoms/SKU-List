@@ -36,38 +36,30 @@ if st.sidebar.button("🔓 Cerrar sesión"):
     st.rerun()
 
 # —————————————————————————————
-# Conexión a Google Drive vía API
+# Configuración de Drive API
 # —————————————————————————————
 service_info = st.secrets["gcp_service_account"]
 creds = Credentials.from_service_account_info(
     service_info,
-    scopes=[
-        "https://www.googleapis.com/auth/drive.readonly",
-    ]
+    scopes=["https://www.googleapis.com/auth/drive.readonly"]
 )
 drive = build("drive", "v3", credentials=creds)
 
-# Este es el nuevo ID de tu archivo XLSX
-SPREADSHEET_ID = "11EXtk3uMcOJn74YhoZP0e8EQ1aDPCVJD"
+# ID del archivo .xlsx en tu Drive
+FILE_ID = "11EXtk3uMcOJn74YhoZP0e8EQ1aDPCVJD"
 
 @st.cache_data(ttl=600)
 def cargar_datos() -> pd.DataFrame:
-    # Descarga el .xlsx completo desde Drive
+    # Descarga el archivo XLSX completo
     buffer = io.BytesIO()
-    request = drive.files().export_media(
-        fileId=SPREADSHEET_ID,
-        mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    request = drive.files().get_media(fileId=FILE_ID)
     downloader = MediaIoBaseDownload(buffer, request)
     done = False
     while not done:
         _, done = downloader.next_chunk()
     buffer.seek(0)
-    # Lee la hoja "Lista_SKU", asume que el header está en la segunda fila (header=1)
-    df = pd.read_excel(buffer,
-                       sheet_name="Lista_SKU",
-                       header=1,
-                       usecols="B:C")
+    # Lee la hoja "Lista_SKU", asumiendo que headers están en la primera fila
+    df = pd.read_excel(buffer, sheet_name="Lista_SKU", header=0, usecols="B:C")
     return df
 
 # —————————————————————————————
@@ -75,7 +67,7 @@ def cargar_datos() -> pd.DataFrame:
 # —————————————————————————————
 st.title("📊 Lista SKU desde archivo XLSX con filtros y descarga")
 
-# 1) Carga de la hoja
+# 1) Botón de carga
 if "df" not in st.session_state:
     if st.button("🔄 Cargar datos"):
         with st.spinner("Descargando y leyendo XLSX…"):
@@ -88,38 +80,35 @@ if "df" in st.session_state:
     # Selector de columna
     columna = st.selectbox("Selecciona columna para filtrar", df.columns)
 
-    # Tres filtros
+    # Tres filtros en fila
     c1, c2, c3 = st.columns(3)
     t1 = c1.text_input("Filtro 1", value=st.session_state.get("t1",""), key="t1")
     t2 = c2.text_input("Filtro 2", value=st.session_state.get("t2",""), key="t2")
     t3 = c3.text_input("Filtro 3", value=st.session_state.get("t3",""), key="t3")
 
-    # Tres columnas de botones
+    # Botones en 3 columnas
     b1, b2, b3 = st.columns(3)
 
-    # — Descargar libro completo XLSX — b1
+    # — Descargar archivo XLSX original —
     with b1:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
-        # reutilizamos el buffer de export_media
+        # Re-descargamos el mismo buffer para ofrecerlo
         buf2 = io.BytesIO()
-        req2 = drive.files().export_media(
-            fileId=SPREADSHEET_ID,
-            mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        req2 = drive.files().get_media(fileId=FILE_ID)
         dl2 = MediaIoBaseDownload(buf2, req2)
         done2 = False
         while not done2:
             _, done2 = dl2.next_chunk()
         buf2.seek(0)
         st.download_button(
-            "📥 Descargar libro completo",
+            label="📥 Descargar XLSX original",
             data=buf2,
-            file_name="lista_sku_libro_completo.xlsx",
+            file_name="archivo_completo.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # — Limpiar filtros — b2
+    # — Limpiar filtros —
     with b2:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         if st.button("🧹 Limpiar filtros", key="clear_btn"):
@@ -128,7 +117,7 @@ if "df" in st.session_state:
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # — Descargar CSV filtrado — b3
+    # — Descargar CSV filtrado —
     with b3:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         df_fil = df
@@ -137,13 +126,14 @@ if "df" in st.session_state:
                 df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
         csv = df_fil.to_csv(index=False).encode("utf-8")
         st.download_button(
-            "📥 Descargar CSV filtrado",
+            label="📥 Descargar CSV filtrado",
             data=csv,
             file_name="lista_sku_filtrado.csv",
             mime="text/csv"
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # Mostrar tabla filtrada
     st.dataframe(df_fil, use_container_width=True)
 
 else:
