@@ -71,7 +71,7 @@ def cargar_datos() -> pd.DataFrame:
 # —————————————————————————————
 # UI principal
 # —————————————————————————————
-st.title("📊 Lista SKU desde archivo XLSX con filtros y descarga")
+st.title("📊 Lista SKU")
 
 # 1) Botón de carga
 if "df" not in st.session_state:
