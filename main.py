@@ -86,11 +86,23 @@ if "df" in st.session_state:
     # Botones en 3 columnas
     b1, b2, b3 = st.columns(3)
 
-    # CSV Original (centrado)
+    # XLSX Original (centrado)
     with b1:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
-        csv_orig = df.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Descargar CSV original", csv_orig, "lista_sku_original.csv", "text/csv")
+        # Creamos un buffer en memoria
+        buffer = io.BytesIO()
+        # Escribimos el DataFrame completo en Excel
+        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="Sheet1")
+            writer.save()
+        buffer.seek(0)
+        # Botón de descarga .xlsx
+        st.download_button(
+            label="📥 Descargar Excel original",
+            data=buffer,
+            file_name="lista_sku_original.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Limpiar filtros (centrado)
