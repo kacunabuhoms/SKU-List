@@ -106,7 +106,7 @@ if "df" in st.session_state:
             _, done2 = dl2.next_chunk()
         buf2.seek(0)
         st.download_button(
-            label="📥 Descargar XLSX original",
+            label="📥 Descargar Archivo Original",
             data=buf2,
             file_name="archivo_completo.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
