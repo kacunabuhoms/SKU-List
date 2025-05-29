@@ -10,6 +10,7 @@ st.set_page_config(page_title="Lista SKU", layout="wide")
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.email = ""
+    st.session_state.filters = {"t1": "", "t2": "", "t3": ""}
 
 # ————— Pantalla de login —————
 if not st.session_state.authenticated:
@@ -22,15 +23,16 @@ if not st.session_state.authenticated:
             if email == "kacuna@buhoms.com" and password == "a":
                 st.session_state.authenticated = True
                 st.session_state.email = email
-                st.rerun()   # <–– forzamos rerun aquí
+                st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos.")
-    st.stop()  # si no autenticó, detenemos aquí
+    st.stop()
 
-# ————— Barra lateral —————
-st.sidebar.markdown("### 🧑‍💼 Sesión")
-st.sidebar.write(st.session_state.email)
-if st.sidebar.button("Cerrar sesión"):
+# ————— Barra lateral formateada —————
+st.sidebar.markdown("### 🧑‍💼 Sesión activa")
+st.sidebar.markdown(f"**{st.session_state.email}**")
+st.sidebar.markdown("---")
+if st.sidebar.button("🔓 Cerrar sesión"):
     st.session_state.authenticated = False
     st.session_state.email = ""
     st.rerun()
@@ -85,11 +87,9 @@ T5qiE8e7Sxxf8Ld85leeOzs=
 # —————————————————————————————
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 credentials = Credentials.from_service_account_info(
-    SERVICE_ACCOUNT_INFO,
-    scopes=SCOPES
+    SERVICE_ACCOUNT_INFO, scopes=SCOPES
 )
 gc = gspread.authorize(credentials)
-
 SPREADSHEET_ID = "1vAoNVtLGFE1dALZMBSAxmKgzfcl16wl2VHtUlgiCWZg"
 WORKSHEET_NAME = "Lista_SKU"
 
@@ -119,26 +119,60 @@ if "df" in st.session_state:
     # Selección de columna
     columna = st.selectbox("Selecciona columna para filtrar", df.columns)
 
-    # Tres filtros
+    # Tres filtros en una fila de 3 columnas
     c1, c2, c3 = st.columns(3)
-    t1 = c1.text_input("Filtro 1")
-    t2 = c2.text_input("Filtro 2")
-    t3 = c3.text_input("Filtro 3")
+    st.session_state.filters["t1"] = c1.text_input("Filtro 1", value=st.session_state.filters["t1"])
+    st.session_state.filters["t2"] = c2.text_input("Filtro 2", value=st.session_state.filters["t2"])
+    st.session_state.filters["t3"] = c3.text_input("Filtro 3", value=st.session_state.filters["t3"])
 
-    # Botones descarga bajo filtros
-    b1, b2 = st.columns(2)
-    csv_orig = st.session_state.df.to_csv(index=False).encode("utf-8")
+    # Botones en 3 columnas: original, limpiar, filtrado
+    b1, b2, b3 = st.columns(3)
+    # Inline CSS para colores pastel
+    st.markdown(
+        """
+        <style>
+        .orig button {background-color: #a8dadc !important;}
+        .clear button {background-color: #ffadad !important;}
+        .filt button {background-color: #caffbf !important;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     with b1:
-        st.download_button("📥 Descargar CSV original", csv_orig, "lista_sku_original.csv", "text/csv")
-    df_filtrado = df
-    for txt in (t1, t2, t3):
-        if txt:
-            df_filtrado = df_filtrado[df_filtrado[columna].str.contains(txt, case=False, na=False)]
-    csv_filt = df_filtrado.to_csv(index=False).encode("utf-8")
+        st.markdown('<div class="orig">', unsafe_allow_html=True)
+        csv_orig = st.session_state.df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 CSV original",
+            data=csv_orig,
+            file_name="lista_sku_original.csv",
+            mime="text/csv",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+
     with b2:
-        st.download_button("📥 Descargar CSV filtrado", csv_filt, "lista_sku_filtrado.csv", "text/csv")
+        if st.button("🧹 Limpiar filtros", key="clear"):
+            st.session_state.filters = {"t1": "", "t2": "", "t3": ""}
+            st.rerun()
+
+    with b3:
+        st.markdown('<div class="filt">', unsafe_allow_html=True)
+        # Aplicar filtros
+        df_filtrado = df
+        for txt in st.session_state.filters.values():
+            if txt:
+                df_filtrado = df_filtrado[df_filtrado[columna].str.contains(txt, case=False, na=False)]
+        csv_filt = df_filtrado.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 CSV filtrado",
+            data=csv_filt,
+            file_name="lista_sku_filtrado.csv",
+            mime="text/csv",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # Mostrar tabla filtrada
     st.dataframe(df_filtrado, use_container_width=True)
+
 else:
     st.info("Pulsa **Cargar datos** para empezar.")
