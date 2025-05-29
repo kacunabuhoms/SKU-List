@@ -118,81 +118,41 @@ if "df" in st.session_state:
     with c3: t3 = st.text_input("Filtro 3", key="t3")
 
     # Botones en 3 columnas
-        # Botones en 3 columnas: original / limpiar / filtrado
     b1, b2, b3 = st.columns(3)
-
-    # CSV Original (azul pastel), centrado
     with b1:
         st.markdown(
-            """
-            <div style="
-                background: #a8dadc;
-                padding: 16px;
-                border-radius: 8px;
-                width: 100%;
-                text-align: center;
-            ">
-            """,
-            unsafe_allow_html=True,
+            '<div style="background:#a8dadc;padding:8px;border-radius:8px;display:inline-block;">',
+            unsafe_allow_html=True
         )
-        csv_orig = st.session_state.df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 CSV original",
-            data=csv_orig,
-            file_name="lista_sku_original.csv",
-            mime="text/csv",
-        )
+        csv_orig = st.session_state.df.to_csv(index=False).encode()
+        st.download_button("📥 CSV original", csv_orig, "lista_sku_original.csv", "text/csv")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Limpiar filtros (rojo pastel), centrado
-    with b2:
-        st.markdown(
-            """
-            <div style="
-                background: #ffadad;
-                padding: 16px;
-                border-radius: 8px;
-                width: 100%;
-                text-align: center;
-            ">
-            """,
-            unsafe_allow_html=True,
-        )
-        if st.button("🧹 Limpiar filtros", key="clear_btn"):
-            for k in ("t1", "t2", "t3"):
-                st.session_state.pop(k, None)
-            st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+    # with b2:
+        # st.markdown(
+        #     '<div style="background:#ffadad;padding:8px;border-radius:8px;display:inline-block;">',
+        #     unsafe_allow_html=True
+        # )
+        # if st.button("🧹 Limpiar filtros", key="clear_btn"):
+        #     # eliminamos las keys t1, t2, t3 de session_state
+        #     for k in ("t1","t2","t3"):
+        #         st.session_state.pop(k, None)
+        #     st.rerun()
+        # st.markdown("</div>", unsafe_allow_html=True)
 
-    # CSV Filtrado (verde pastel), centrado
     with b3:
         st.markdown(
-            """
-            <div style="
-                background: #caffbf;
-                padding: 16px;
-                border-radius: 8px;
-                width: 100%;
-                text-align: center;
-            ">
-            """,
-            unsafe_allow_html=True,
+            '<div style="background:#caffbf;padding:8px;border-radius:8px;display:inline-block;">',
+            unsafe_allow_html=True
         )
-        df_filtrado = df
-        for txt in (st.session_state.get("t1", ""),
-                    st.session_state.get("t2", ""),
-                    st.session_state.get("t3", "")):
+        # aplicamos filtros
+        df_fil = df
+        for txt in (st.session_state.get("t1",""), st.session_state.get("t2",""), st.session_state.get("t3","")):
             if txt:
-                df_filtrado = df_filtrado[df_filtrado[columna].str.contains(txt, case=False, na=False)]
-        csv_filt = df_filtrado.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 CSV filtrado",
-            data=csv_filt,
-            file_name="lista_sku_filtrado.csv",
-            mime="text/csv",
-        )
+                df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
+        csv_filt = df_fil.to_csv(index=False).encode()
+        st.download_button("📥 CSV filtrado", csv_filt, "lista_sku_filtrado.csv", "text/csv")
         st.markdown("</div>", unsafe_allow_html=True)
-
 
     # Mostrar la tabla filtrada
     st.dataframe(df_fil, use_container_width=True)
