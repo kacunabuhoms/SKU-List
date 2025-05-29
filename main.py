@@ -6,7 +6,7 @@ from google.oauth2.service_account import Credentials
 # ————— Configuración de página —————
 st.set_page_config(page_title="Lista SKU", layout="wide")
 
-# ————— Sesión: inicializar flags —————
+# ————— Inicializar sesión —————
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.email = ""
@@ -22,19 +22,19 @@ if not st.session_state.authenticated:
             if email == "kacuna@buhoms.com" and password == "a":
                 st.session_state.authenticated = True
                 st.session_state.email = email
+                st.rerun()   # <–– forzamos rerun aquí
             else:
                 st.error("Usuario o contraseña incorrectos.")
-    # Si sigue sin autenticar, detenemos aquí
-    if not st.session_state.authenticated:
-        st.stop()
+    st.stop()  # si no autenticó, detenemos aquí
 
-# ————— Barra lateral (cuando ya está autenticado) —————
+# ————— Barra lateral —————
 st.sidebar.markdown("### 🧑‍💼 Sesión")
 st.sidebar.write(st.session_state.email)
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
     st.session_state.email = ""
-    st.rerun()  # fuerzo rerun tras logout
+    st.rerun()
+
 # —————————————————————————————
 # 1) CREDENCIALES DE GOOGLE EMBEBIDAS
 # —————————————————————————————
@@ -113,46 +113,32 @@ if "df" not in st.session_state:
             st.session_state.df = cargar_datos()
         st.success(f"Datos cargados: {len(st.session_state.df)} filas")
 
-# Si ya cargó:
 if "df" in st.session_state:
     df = st.session_state.df.copy()
 
     # Selección de columna
     columna = st.selectbox("Selecciona columna para filtrar", df.columns)
 
-    # Tres filtros en columnas
+    # Tres filtros
     c1, c2, c3 = st.columns(3)
     t1 = c1.text_input("Filtro 1")
     t2 = c2.text_input("Filtro 2")
     t3 = c3.text_input("Filtro 3")
 
-    # Botones de descarga en dos columnas bajo los filtros
+    # Botones descarga bajo filtros
     b1, b2 = st.columns(2)
     csv_orig = st.session_state.df.to_csv(index=False).encode("utf-8")
     with b1:
-        st.download_button(
-            label="📥 Descargar CSV original",
-            data=csv_orig,
-            file_name="lista_sku_original.csv",
-            mime="text/csv"
-        )
-
-    # Aplicar filtros
+        st.download_button("📥 Descargar CSV original", csv_orig, "lista_sku_original.csv", "text/csv")
     df_filtrado = df
     for txt in (t1, t2, t3):
         if txt:
             df_filtrado = df_filtrado[df_filtrado[columna].str.contains(txt, case=False, na=False)]
-
     csv_filt = df_filtrado.to_csv(index=False).encode("utf-8")
     with b2:
-        st.download_button(
-            label="📥 Descargar CSV filtrado",
-            data=csv_filt,
-            file_name="lista_sku_filtrado.csv",
-            mime="text/csv"
-        )
+        st.download_button("📥 Descargar CSV filtrado", csv_filt, "lista_sku_filtrado.csv", "text/csv")
 
-    # Mostrar sólo la tabla filtrada
+    # Mostrar tabla filtrada
     st.dataframe(df_filtrado, use_container_width=True)
 else:
     st.info("Pulsa **Cargar datos** para empezar.")
