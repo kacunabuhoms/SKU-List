@@ -17,23 +17,25 @@ if "authenticated" not in st.session_state:
 if not st.session_state.authenticated:
     with st.form("login_form"):
         st.markdown("### 🔐 Iniciar sesión")
-        email = st.text_input("Correo electrónico")
+        email    = st.text_input("Correo electrónico")
         password = st.text_input("Contraseña", type="password")
         submitted = st.form_submit_button("Ingresar")
 
         if submitted:
-            # obtener el dict de usuarios de secrets
             users = st.secrets.get("users", {})
-            # normalizar la clave
             key = email.strip().lower().replace("@", "_").replace(".", "_")
             if users.get(key) == password:
                 st.session_state.authenticated = True
                 st.session_state.user = email
                 st.success(f"Bienvenido, {email} 👋")
-                st.experimental_rerun()
+                # ya no llamamos a experimental_rerun(): 
+                # el resto del script solo se ejecutará después de este bloque
             else:
                 st.error("Correo o contraseña incorrectos.")
-    st.stop()
+
+    # detenemos aquí la ejecución si NO está autenticado
+    if not st.session_state.authenticated:
+        st.stop()
 
 # ————————————————
 # CONFIGURACIÓN GENERAL
@@ -44,15 +46,12 @@ st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
     st.session_state.user = ""
-    st.experimental_rerun()
+    st.experimental_rerun()  # este sí suele existir para reiniciar
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 GOOGLE_DRIVE_FILE_ID = st.secrets["sheets"]["file_id"]
 LOCAL_FILENAME = "OT_6143.xlsx"
 
-# ————————————————
-# AUTH / DESCARGA
-# ————————————————
 def auth_drive():
     creds = None
     if os.path.exists('token.pkl'):
@@ -70,10 +69,10 @@ def auth_drive():
     return creds
 
 def descargar_excel_drive(file_id, local_filename):
-    creds = auth_drive()
+    creds   = auth_drive()
     service = build('drive', 'v3', credentials=creds)
     request = service.files().get_media(fileId=file_id)
-    fh = io.FileIO(local_filename, 'wb')
+    fh      = io.FileIO(local_filename, 'wb')
     downloader = MediaIoBaseDownload(fh, request)
     done = False
     while not done:
@@ -82,7 +81,7 @@ def descargar_excel_drive(file_id, local_filename):
     return local_filename
 
 # ————————————————
-# INTERFAZ
+# INTERFAZ DE DESCARGA y PROCESAMIENTO
 # ————————————————
 st.markdown("### 📦 Archivo de Datos desde DDV")
 col1, col2 = st.columns(2)
@@ -108,5 +107,7 @@ with col2:
 
 if st.session_state.get("archivo"):
     df_raw = pd.read_excel(st.session_state.archivo, sheet_name="LISTA SKU")
-    # (… resto de tu lógica de filtrado …)
+    # …aquí sigue tu lógica de renombrar columnas, filtros y mostrar el dataframe…
+
+    st.subheader("📋 Resultados filtrados")
     st.dataframe(df_raw)
