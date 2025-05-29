@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 import gspread
-import base64
 import io
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 # ————— Configuración de página —————
 st.set_page_config(page_title="Lista SKU", layout="wide")
@@ -39,14 +40,18 @@ if st.sidebar.button("🔓 Cerrar sesión"):
     st.rerun()
 
 # —————————————————————————————
-# Conexión a Google Sheets usando st.secrets
+# Conexión a Google Sheets / Drive usando st.secrets
 # —————————————————————————————
 service_info = st.secrets["gcp_service_account"]
 creds = Credentials.from_service_account_info(
     service_info,
-    scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    scopes=[
+        "https://www.googleapis.com/auth/spreadsheets.readonly",
+        "https://www.googleapis.com/auth/drive.readonly",
+    ]
 )
 gc = gspread.authorize(creds)
+drive_service = build("drive", "v3", credentials=creds)
 
 SPREADSHEET_ID  = st.secrets["app"]["spreadsheet_id"]
 WORKSHEET_NAME = "Lista_SKU"
@@ -86,24 +91,24 @@ if "df" in st.session_state:
     # Tres columnas de botones
     b1, b2, b3 = st.columns(3)
 
-    # — XLSX original completo — b1
+    # — XLSX original COMPLETO del libro de Sheets — b1
     with b1:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
-        # Obtenemos toda la hoja
-        sh = gc.open_by_key(SPREADSHEET_ID)
-        ws = sh.worksheet(WORKSHEET_NAME)
-        all_values = ws.get_all_values()
-        df_full = pd.DataFrame(all_values[1:], columns=all_values[0])
-        # Escribimos a Excel en memoria
         buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-            df_full.to_excel(writer, index=False, sheet_name="Sheet1")
+        request = drive_service.files().export_media(
+            fileId=SPREADSHEET_ID,
+            mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        downloader = MediaIoBaseDownload(buffer, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
         buffer.seek(0)
         st.download_button(
             label="📥 Descargar Excel original",
             data=buffer,
-            file_name="lista_sku_original.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            file_name="lista_sku_completo.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -130,11 +135,11 @@ if "df" in st.session_state:
             label="📥 Descargar CSV filtrado",
             data=csv_filt,
             file_name="lista_sku_filtrado.csv",
-            mime="text/csv"
+            mime="text/csv",
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Mostrar tabla filtrada
+    # Mostrar la tabla filtrada
     st.dataframe(df_fil, use_container_width=True)
 
 else:
