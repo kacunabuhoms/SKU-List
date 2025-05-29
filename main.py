@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import base64
 from google.oauth2.service_account import Credentials
 
-# — Config página wide —
+# ————— Configuración de página en modo wide —————
 st.set_page_config(page_title="Lista SKU", layout="wide")
 
-# — Sesión/login (igual que antes) —
+# ————— Autenticación básica —————
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.email = ""
@@ -25,7 +26,7 @@ if not st.session_state.authenticated:
                 st.error("Usuario o contraseña incorrectos.")
     st.stop()
 
-# — Sidebar —
+# ————— Barra lateral —————
 st.sidebar.markdown("### 🧑‍💼 Sesión activa")
 st.sidebar.markdown(f"**{st.session_state.email}**")
 st.sidebar.markdown("---")
@@ -33,7 +34,6 @@ if st.sidebar.button("🔓 Cerrar sesión"):
     st.session_state.authenticated = False
     st.session_state.email = ""
     st.rerun()
-
 
 # —————————————————————————————
 # 1) CREDENCIALES DE GOOGLE EMBEBIDAS
