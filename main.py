@@ -57,7 +57,7 @@ gc = gspread.authorize(creds)
 # —————————————————————————————
 # 3) PARÁMETROS DE LA HOJA
 # —————————————————————————————
-SPREADSHEET_ID = "1vAoNVtLGFE1dALZMBSAxmKgzfcl16wl2VHtUlgiCWg"
+SPREADSHEET_ID = "1vAoNVtLGFE1dALZMBSAxmKgzfcl16wl2VHtUlgiCWZg"
 WORKSHEET_NAME = "Lista_SKU"
 
 @st.cache_data(ttl=600)
