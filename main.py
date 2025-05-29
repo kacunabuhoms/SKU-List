@@ -36,9 +36,7 @@ if not st.session_state.authenticated:
     if not st.session_state.authenticated:
         st.stop()
 
-# —————————————————————————————————————————
-# SIDEBAR: mostrar usuario y botón Cerrar sesión
-# —————————————————————————————————————————
+# Sidebar con usuario y botón de logout
 st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
@@ -48,22 +46,18 @@ if st.sidebar.button("Cerrar sesión"):
 # —————————————————————————————————————————
 # LECTURA DE SECRETS PARA GSPREAD & SHEETS
 # —————————————————————————————————————————
-creds_info   = st.secrets["credentials"]
-scopes       = st.secrets["SCOPES"]
-sheet_id     = st.secrets["SPREADSHEET_ID"]
+creds_info = st.secrets["credentials"]
+scopes     = creds_info["SCOPES"]
+sheet_id   = creds_info["SPREADSHEET_ID"]
 
 # —————————————————————————————————————————
 # CLIENTE DE GSPREAD
 # —————————————————————————————————————————
-
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    # Cargamos el dict de credenciales
-    creds_info = st.secrets["credentials"].copy()
-    # Quitamos posibles espacios o saltos antes o después del PEM
-    creds_info["private_key"] = creds_info["private_key"].strip()
-    # Y ahora autorizamos
-    creds = Credentials.from_service_account_info(creds_info, scopes=st.secrets["SCOPES"])
+    info = creds_info.copy()
+    info["private_key"] = info["private_key"].strip()
+    creds = Credentials.from_service_account_info(info, scopes=scopes)
     return gspread.authorize(creds)
 
 # —————————————————————————————————————————
@@ -76,12 +70,10 @@ def load_sheet_df(sheet_name: str) -> pd.DataFrame:
     records = ws.get_all_records()
     return pd.DataFrame(records)
 
-# Botón para recargar datos manualmente
 if st.button("📥 Cargar y procesar datos desde Google Sheets"):
     load_sheet_df.clear()
     st.success("✅ Datos recargados en memoria.")
 
-# Intentamos cargar la pestaña "LISTA SKU"
 try:
     df_raw = load_sheet_df("LISTA SKU")
 except Exception as e:
@@ -99,10 +91,8 @@ if len(cols) >= 3 and cols[1].startswith("Unnamed") and cols[2].startswith("Unna
         [["Nombre Largo","SKU"]]
     )
 else:
-    # asumimos que ya vienen como "Nombre Largo" y "SKU"
     df = df_raw[["Nombre Largo","SKU"]].copy()
 
-# limpiar filas vacías o cabeceras repetidas
 df = df[df["SKU"].notna()]
 df = df[df["Nombre Largo"].str.lower() != "nombre largo"]
 
@@ -110,13 +100,10 @@ df = df[df["Nombre Largo"].str.lower() != "nombre largo"]
 # INTERFAZ DE FILTRADO
 # —————————————————————————————————————————
 st.title("🦉 Filtro de Lista de SKUs")
-
 col1, col2, col3, col4 = st.columns([3,2,2,2])
+
 with col1:
-    column_selection = st.selectbox(
-        "Columna a filtrar",
-        ("Nombre Largo","SKU")
-    )
+    column_selection = st.selectbox("Columna a filtrar", ("Nombre Largo","SKU"))
 with col2:
     f1 = st.text_input("Filtro 1").strip().lower()
 with col3:
