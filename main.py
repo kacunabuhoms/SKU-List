@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import io
 import gspread
+import json
+import tempfile
 from google.oauth2.service_account import Credentials
 
 # —————————————————————————————————————————
@@ -36,7 +38,6 @@ if not st.session_state.authenticated:
     if not st.session_state.authenticated:
         st.stop()
 
-# Sidebar con información de usuario y botón de logout
 st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
@@ -44,47 +45,63 @@ if st.sidebar.button("Cerrar sesión"):
     st.experimental_rerun()
 
 # —————————————————————————————————————————
-# LECTURA DE SECRETS PARA GSPREAD & SHEETS
+# LEEMOS TODOS LOS SECRETS
 # —————————————————————————————————————————
 raw_creds       = st.secrets["credentials"]
 users           = st.secrets["users"]
 SCOPES          = raw_creds["SCOPES"]
 SPREADSHEET_ID  = raw_creds["SPREADSHEET_ID"]
-SHEET_URL       = raw_creds["SHEET_URL"]
 
 # —————————————————————————————————————————
-# CLIENTE DE GSPREAD
+# FUNCIÓN PARA OBTENER CLIENTE GSPREAD
 # —————————————————————————————————————————
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    # Copiamos a un dict estándar para poder pop()
+    # Hacemos una copia limpia del dict
     info = dict(raw_creds)
-    # Arreglamos los literales "\n" de la clave privada
-    info["private_key"] = info["private_key"].replace("\\n", "\n").strip()
-    # Eliminamos las claves que no son parte del JSON de service-account
-    info.pop("SCOPES", None)
-    info.pop("SPREADSHEET_ID", None)
-    info.pop("SHEET_URL", None)
-    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+
+    # 1) Quitamos claves que no van al JSON de service-account
+    for k in ("SCOPES","SPREADSHEET_ID","SHEET_URL"):
+        info.pop(k, None)
+
+    # 2) Normalizamos el private_key
+    pk = info.get("private_key", "")
+    # Si llegara a venir con literales "\n", los reemplazamos
+    if "\\n" in pk:
+        pk = pk.replace("\\n", "\n")
+    # Eliminamos indentaciones y líneas vacías
+    lines = [line.strip() for line in pk.splitlines() if line.strip()]
+    pk = "\n".join(lines) + "\n"
+    info["private_key"] = pk
+
+    # 3) Volcamos a un archivo temporal JSON y lo cargamos desde ahí
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".json") as tmp:
+        json.dump(info, tmp)
+        tmp.flush()
+        creds = Credentials.from_service_account_file(tmp.name, scopes=SCOPES)
+
     return gspread.authorize(creds)
 
 # —————————————————————————————————————————
-# CARGAR DATOS DE LA HOJA
+# FUNCIÓN PARA LEER UNA PESTAÑA Y DEVOLVER UN DF
 # —————————————————————————————————————————
 @st.cache_data(show_spinner=False)
 def load_sheet_df(sheet_name: str) -> pd.DataFrame:
     client = get_gspread_client()
-    # Abrimos por ID en lugar de URL
-    sheet = client.open_by_key(SPREADSHEET_ID)
-    ws    = sheet.worksheet(sheet_name)
+    sheet  = client.open_by_key(SPREADSHEET_ID)
+    ws     = sheet.worksheet(sheet_name)
     return pd.DataFrame(ws.get_all_records())
 
-# Botón manual para forzar recarga de datos
+# —————————————————————————————————————————
+# BOTÓN PARA FORZAR RECARGA
+# —————————————————————————————————————————
 if st.button("📥 Cargar y procesar datos desde Google Sheets"):
     load_sheet_df.clear()
     st.success("✅ Datos recargados en memoria.")
 
-# Lectura de la pestaña "LISTA SKU"
+# —————————————————————————————————————————
+# LECTURA DE "LISTA SKU"
+# —————————————————————————————————————————
 try:
     df_raw = load_sheet_df("LISTA SKU")
 except Exception as e:
@@ -92,7 +109,7 @@ except Exception as e:
     st.stop()
 
 # —————————————————————————————————————————
-# PROCESAMIENTO INICIAL: renombrar columnas
+# PROCESAMIENTO INICIAL
 # —————————————————————————————————————————
 cols = list(df_raw.columns)
 if len(cols) >= 3 and cols[1].startswith("Unnamed") and cols[2].startswith("Unnamed"):
@@ -132,15 +149,12 @@ def passes_filters(text):
 df_filtered = df[df[column_selection].apply(passes_filters)]
 
 # —————————————————————————————————————————
-# MOSTRAR RESULTADOS
+# MOSTRAR Y DESCARGAR RESULTADOS
 # —————————————————————————————————————————
 st.subheader("📈 Resultados filtrados")
 st.write(f"Total encontrados: **{len(df_filtered)}**")
 st.dataframe(df_filtered, use_container_width=True)
 
-# —————————————————————————————————————————
-# DESCARGA DE RESULTADOS
-# —————————————————————————————————————————
 buffer = io.BytesIO()
 with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
     df_filtered.to_excel(writer, index=False, sheet_name="Filtrado")
@@ -150,5 +164,5 @@ st.download_button(
     label="📥 Descargar resultados (.xlsx)",
     data=buffer,
     file_name="filtrado_sku.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    mime="application/vnd.openxmlformats-officedocument-spreadsheetml.sheet"
 )
