@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import base64
+import io
 from google.oauth2.service_account import Credentials
 
 # ————— Configuración de página —————
@@ -20,7 +21,6 @@ if not st.session_state.authenticated:
         email    = st.text_input("Usuario (email)")
         password = st.text_input("Contraseña", type="password")
         if st.form_submit_button("Entrar"):
-            # comprobar en la tabla de secrets
             if email in users and password == users[email]:
                 st.session_state.authenticated = True
                 st.session_state.email = email
@@ -39,7 +39,7 @@ if st.sidebar.button("🔓 Cerrar sesión"):
     st.rerun()
 
 # —————————————————————————————
-# Conexión a Google Sheets
+# Conexión a Google Sheets usando st.secrets
 # —————————————————————————————
 service_info = st.secrets["gcp_service_account"]
 creds = Credentials.from_service_account_info(
@@ -48,7 +48,7 @@ creds = Credentials.from_service_account_info(
 )
 gc = gspread.authorize(creds)
 
-SPREADSHEET_ID = st.secrets["app"]["spreadsheet_id"]
+SPREADSHEET_ID  = st.secrets["app"]["spreadsheet_id"]
 WORKSHEET_NAME = "Lista_SKU"
 
 @st.cache_data(ttl=600)
@@ -83,20 +83,22 @@ if "df" in st.session_state:
     t2 = c2.text_input("Filtro 2", value=st.session_state.get("t2",""), key="t2")
     t3 = c3.text_input("Filtro 3", value=st.session_state.get("t3",""), key="t3")
 
-    # Botones en 3 columnas
+    # Tres columnas de botones
     b1, b2, b3 = st.columns(3)
 
-    # XLSX Original (centrado)
+    # — XLSX original completo — b1
     with b1:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
-        # Creamos un buffer en memoria
+        # Obtenemos toda la hoja
+        sh = gc.open_by_key(SPREADSHEET_ID)
+        ws = sh.worksheet(WORKSHEET_NAME)
+        all_values = ws.get_all_values()
+        df_full = pd.DataFrame(all_values[1:], columns=all_values[0])
+        # Escribimos a Excel en memoria
         buffer = io.BytesIO()
-        # Escribimos el DataFrame completo en Excel
         with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-            df.to_excel(writer, index=False, sheet_name="Sheet1")
-            writer.save()
+            df_full.to_excel(writer, index=False, sheet_name="Sheet1")
         buffer.seek(0)
-        # Botón de descarga .xlsx
         st.download_button(
             label="📥 Descargar Excel original",
             data=buffer,
@@ -105,7 +107,7 @@ if "df" in st.session_state:
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Limpiar filtros (centrado)
+    # — Limpiar filtros — b2
     with b2:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         if st.button("🧹 Limpiar filtros", key="clear_btn"):
@@ -114,7 +116,7 @@ if "df" in st.session_state:
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # CSV Filtrado (centrado)
+    # — CSV filtrado — b3
     with b3:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         df_fil = df
@@ -124,7 +126,12 @@ if "df" in st.session_state:
             if txt:
                 df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
         csv_filt = df_fil.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Descargar CSV filtrado", csv_filt, "lista_sku_filtrado.csv", "text/csv")
+        st.download_button(
+            label="📥 Descargar CSV filtrado",
+            data=csv_filt,
+            file_name="lista_sku_filtrado.csv",
+            mime="text/csv"
+        )
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Mostrar tabla filtrada
