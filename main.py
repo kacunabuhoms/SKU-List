@@ -1,5 +1,5 @@
 import streamlit as st
-# Debe ir **primero**
+# debe ser la primera llamada Streamlit
 st.set_page_config(page_title="Filtro de SKUs", layout="wide")
 
 import pandas as pd
@@ -44,14 +44,14 @@ st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
     st.session_state.user          = ""
-    st.experimental_rerun()  # en 1.45.1 funciona
+    st.experimental_rerun()
 
 # ————————————————
-# CONFIG DRIVE
+# CONFIG DRIVE (Service Account)
 # ————————————————
-SCOPES            = ['https://www.googleapis.com/auth/drive.readonly']
-FILE_ID           = st.secrets["sheets"]["file_id"]
-LOCAL_FILENAME    = "OT_6143.xlsx"
+SCOPES         = ['https://www.googleapis.com/auth/drive.readonly']
+FILE_ID        = st.secrets["sheets"]["file_id"]
+LOCAL_FILENAME = "OT_6143.xlsx"
 
 def auth_drive():
     info  = json.loads(st.secrets["credentials_json"])
@@ -97,18 +97,18 @@ with c2:
 
 if st.session_state.get("archivo"):
     df_raw = pd.read_excel(st.session_state.archivo, sheet_name="LISTA SKU")
-    # validación columnas
+    # Validar columnas
     if "Unnamed: 1" not in df_raw.columns or "Unnamed: 2" not in df_raw.columns:
         st.error("❌ Columnas no encontradas."); st.stop()
 
-    df = df_raw.rename(columns={"Unnamed: 1":"Nombre Largo","Unnamed: 2":"SKU"})[["Nombre Largo","SKU"]]
+    df = df_raw.rename(columns={"Unnamed: 1": "Nombre Largo", "Unnamed: 2": "SKU"})[["Nombre Largo","SKU"]]
     df = df[df["SKU"].notna()]
-    df = df[df["Nombre Largo"].str.lower()!="nombre largo"]
+    df = df[df["Nombre Largo"].str.lower() != "nombre largo"]
 
     def clean(t):
         return t.lower().strip().replace("\xa0"," ") if isinstance(t, str) else ""
 
-    cols = {"Nombre Largo":"Nombre Largo","SKU":"SKU"}
+    cols = {"Nombre Largo": "Nombre Largo", "SKU": "SKU"}
     ca, cb, cc, cd = st.columns([3,2,2,2])
     with ca:
         sel = st.selectbox("Columna", list(cols.keys()))
