@@ -46,18 +46,20 @@ if st.sidebar.button("Cerrar sesión"):
 # —————————————————————————————————————————
 # LECTURA DE SECRETS PARA GSPREAD & SHEETS
 # —————————————————————————————————————————
-_raw_creds      = st.secrets["credentials"]
-creds_dict      = dict(_raw_creds)
-SCOPES          = creds_dict.pop("SCOPES")
-SPREADSHEET_ID  = creds_dict.pop("SPREADSHEET_ID")
+_creds        = st.secrets["credentials"]
+users         = st.secrets["users"]
+SCOPES        = _creds.pop("SCOPES")
+SPREADSHEET_ID = _creds.pop("SPREADSHEET_ID")
+SHEET_URL     = _creds.pop("SHEET_URL")
 
 # —————————————————————————————————————————
 # CLIENTE DE GSPREAD
 # —————————————————————————————————————————
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    info = dict(creds_dict)  # copia para no mutar el original
-    info["private_key"] = info["private_key"].strip()
+    info = dict(_creds)  # copia para no mutar el original
+    # Reemplaza los literales "\n" por saltos de línea reales
+    info["private_key"] = info["private_key"].replace("\\n", "\n").strip()
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
 
@@ -67,11 +69,10 @@ def get_gspread_client():
 @st.cache_data(show_spinner=False)
 def load_sheet_df(sheet_name: str) -> pd.DataFrame:
     client = get_gspread_client()
-    # en lugar de open_by_key, usamos open_by_url
-    ws     = client.open_by_url(st.secrets["credentials"]["SHEET_URL"])\
-                   .worksheet(sheet_name)
+    # Usamos el ID para abrir el spreadsheet
+    sheet  = client.open_by_key(SPREADSHEET_ID)
+    ws     = sheet.worksheet(sheet_name)
     return pd.DataFrame(ws.get_all_records())
-
 
 # Botón manual para forzar recarga de datos
 if st.button("📥 Cargar y procesar datos desde Google Sheets"):
@@ -92,7 +93,7 @@ cols = list(df_raw.columns)
 if len(cols) >= 3 and cols[1].startswith("Unnamed") and cols[2].startswith("Unnamed"):
     df = (
         df_raw
-        .rename(columns={cols[1]:"Nombre Largo", cols[2]:"SKU"})
+        .rename(columns={cols[1]: "Nombre Largo", cols[2]: "SKU"})
         [["Nombre Largo","SKU"]]
     )
 else:
