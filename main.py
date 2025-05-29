@@ -48,40 +48,82 @@ T5qiE8e7Sxxf8Ld85leeOzs=
 }
 
 # —————————————————————————————
-# 2) AUTENTICACIÓN Y CLIENTE DE GSPREAD
+# 2) GOOGLE SHEETS SETUP
 # —————————————————————————————
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO, scopes=SCOPES)
-gc = gspread.authorize(creds)
+credentials = Credentials.from_service_account_info(
+    SERVICE_ACCOUNT_INFO,
+    scopes=SCOPES
+)
+gc = gspread.authorize(credentials)
 
-# —————————————————————————————
-# 3) PARÁMETROS DE LA HOJA
-# —————————————————————————————
 SPREADSHEET_ID = "1vAoNVtLGFE1dALZMBSAxmKgzfcl16wl2VHtUlgiCWZg"
 WORKSHEET_NAME = "Lista_SKU"
 
 @st.cache_data(ttl=600)
 def cargar_datos() -> pd.DataFrame:
-    sh   = gc.open_by_key(SPREADSHEET_ID)
-    ws   = sh.worksheet(WORKSHEET_NAME)
-    raw  = ws.get("B2:C")
+    sh = gc.open_by_key(SPREADSHEET_ID)
+    ws = sh.worksheet(WORKSHEET_NAME)
+    raw = ws.get("B2:C")
     header, *values = raw
     return pd.DataFrame(values, columns=header)
 
 # —————————————————————————————
-# 4) INTERFAZ STREAMLIT
+# 3) STREAMLIT UI
 # —————————————————————————————
-st.title("📊 Lista SKU desde Google Sheets")
+st.title("📊 Lista SKU con filtros y descarga")
 
-st.write(
-    "Pulsa el botón para cargar **Lista_SKU** (columnas B y C) "
-    "desde tu Google Sheet y mostrarla en pantalla."
-)
+st.write("Carga tu hoja **Lista_SKU** y filtra por cualquier texto en la columna que elijas.")
 
-if st.button("Cargar y procesar archivo"):
-    with st.spinner("🔄 Cargando datos..."):
-        df = cargar_datos()
-    st.success(f"✅ {len(df)} filas cargadas")
-    st.dataframe(df, use_container_width=True)
+# Botón de carga
+if "df" not in st.session_state:
+    if st.button("🔄 Cargar datos"):
+        with st.spinner("Obteniendo datos…"):
+            st.session_state.df = cargar_datos()
+        st.success(f"Datos cargados: {len(st.session_state.df)} filas")
+
+if "df" in st.session_state:
+    df_original = st.session_state.df.copy()
+    
+    # — Selección de columna —
+    columna = st.selectbox("Selecciona columna para filtrar", df_original.columns)
+    
+    # — Campos de texto para filtro —
+    t1 = st.text_input("Filtro 1 (texto debe estar)")
+    t2 = st.text_input("Filtro 2 (texto debe estar)")
+    t3 = st.text_input("Filtro 3 (texto debe estar)")
+    
+    # — Aplicar filtros —
+    df_filtrado = df_original
+    for txt in (t1, t2, t3):
+        if txt:
+            df_filtrado = df_filtrado[
+                df_filtrado[columna]
+                .str.contains(txt, case=False, na=False)
+            ]
+    
+    # — Mostrar tablas —
+    st.subheader("Datos originales")
+    st.dataframe(df_original, use_container_width=True)
+    
+    st.subheader("Datos filtrados")
+    st.dataframe(df_filtrado, use_container_width=True)
+    
+    # — Botones de descarga —
+    csv_orig = df_original.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="📥 Descargar CSV original",
+        data=csv_orig,
+        file_name="lista_sku_original.csv",
+        mime="text/csv"
+    )
+    
+    csv_filt = df_filtrado.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="📥 Descargar CSV filtrado",
+        data=csv_filt,
+        file_name="lista_sku_filtrado.csv",
+        mime="text/csv"
+    )
 else:
-    st.info("Aún no has cargado los datos. Haz clic en el botón arriba.")
+    st.info("Pulsa **Cargar datos** para empezar.")
