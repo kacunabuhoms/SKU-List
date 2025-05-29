@@ -108,7 +108,7 @@ if "df" in st.session_state:
         st.download_button(
             label="📥 Descargar Archivo Original",
             data=buf2,
-            file_name="archivo_completo.xlsx",
+            file_name="ODT_2024.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         st.markdown('</div>', unsafe_allow_html=True)
@@ -133,7 +133,7 @@ if "df" in st.session_state:
         st.download_button(
             label="📥 Descargar CSV filtrado",
             data=csv,
-            file_name="lista_sku_filtrado.csv",
+            file_name="Lista_SKU_FILTRADO.csv",
             mime="text/csv"
         )
         st.markdown('</div>', unsafe_allow_html=True)
