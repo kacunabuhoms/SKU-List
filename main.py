@@ -69,13 +69,11 @@ def cargar_datos() -> pd.DataFrame:
     return pd.DataFrame(values, columns=header)
 
 # —————————————————————————————
-# 3) STREAMLIT UI
+# 3) INTERFAZ STREAMLIT
 # —————————————————————————————
 st.title("📊 Lista SKU con filtros y descarga")
 
-st.write("Carga tu hoja **Lista_SKU** y filtra por cualquier texto en la columna que elijas.")
-
-# Botón de carga
+# Carga inicial
 if "df" not in st.session_state:
     if st.button("🔄 Cargar datos"):
         with st.spinner("Obteniendo datos…"):
@@ -83,42 +81,34 @@ if "df" not in st.session_state:
         st.success(f"Datos cargados: {len(st.session_state.df)} filas")
 
 if "df" in st.session_state:
-    df_original = st.session_state.df.copy()
-    
-    # — Selección de columna —
-    columna = st.selectbox("Selecciona columna para filtrar", df_original.columns)
-    
-    # — Campos de texto para filtro —
-    t1 = st.text_input("Filtro 1 (texto debe estar)")
-    t2 = st.text_input("Filtro 2 (texto debe estar)")
-    t3 = st.text_input("Filtro 3 (texto debe estar)")
-    
-    # — Aplicar filtros —
-    df_filtrado = df_original
+    df = st.session_state.df.copy()
+
+    # Selección de columna
+    columna = st.selectbox("Selecciona columna para filtrar", df.columns)
+
+    # Tres filtros en columnas
+    col1, col2, col3 = st.columns(3)
+    t1 = col1.text_input("Filtro 1")
+    t2 = col2.text_input("Filtro 2")
+    t3 = col3.text_input("Filtro 3")
+
+    # Aplicar todos los filtros sobre la misma tabla
     for txt in (t1, t2, t3):
         if txt:
-            df_filtrado = df_filtrado[
-                df_filtrado[columna]
-                .str.contains(txt, case=False, na=False)
-            ]
-    
-    # — Mostrar tablas —
-    st.subheader("Datos originales")
-    st.dataframe(df_original, use_container_width=True)
-    
-    st.subheader("Datos filtrados")
-    st.dataframe(df_filtrado, use_container_width=True)
-    
-    # — Botones de descarga —
-    csv_orig = df_original.to_csv(index=False).encode("utf-8")
+            df = df[df[columna].str.contains(txt, case=False, na=False)]
+
+    # Mostrar sólo la tabla filtrada
+    st.dataframe(df, use_container_width=True)
+
+    # Botones de descarga
+    csv_orig = st.session_state.df.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="📥 Descargar CSV original",
         data=csv_orig,
         file_name="lista_sku_original.csv",
         mime="text/csv"
     )
-    
-    csv_filt = df_filtrado.to_csv(index=False).encode("utf-8")
+    csv_filt = df.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="📥 Descargar CSV filtrado",
         data=csv_filt,
