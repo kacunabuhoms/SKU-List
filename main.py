@@ -86,7 +86,7 @@ if "df" in st.session_state:
     st.download_button(
         "📥 Descargar XLSX original",
         data=buf2,
-        file_name="archivo_completo.xlsx",
+        file_name="ODT_2024.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     st.markdown('</div>', unsafe_allow_html=True)
