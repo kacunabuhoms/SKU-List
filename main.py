@@ -53,14 +53,13 @@ def cargar_datos() -> pd.DataFrame:
     while not done:
         _, done = dl.next_chunk()
     buf.seek(0)
-    # Leemos la hoja Lista_SKU, header en la fila 2 y columnas B:C
     df = pd.read_excel(buf, sheet_name="Lista_SKU", header=1, usecols="B:C")
     return df
 
 # ————— UI principal —————
 st.title("📊 Lista SKU")
 
-# — Botón de descarga del XLSX original (rebautiza "Cargar datos") —
+# — Descargar XLSX original (y carga datos) —
 st.markdown('<div style="text-align:center; margin-bottom:1rem;">', unsafe_allow_html=True)
 buf2 = io.BytesIO()
 req2 = drive.files().get_media(fileId=FILE_ID)
@@ -75,15 +74,23 @@ if st.download_button(
     file_name="archivo_completo.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 ):
-    # al descargar, también cargamos los datos en session_state
-    st.session_state.df = cargar_datos()
-    st.session_state.df_fil = st.session_state.df.copy()
+    st.session_state.df      = cargar_datos()
+    st.session_state.df_fil  = st.session_state.df.copy()
 st.markdown('</div>', unsafe_allow_html=True)
 
+# — Limpiar filtros (recuadro centrado) —
+if "df" in st.session_state:
+    st.markdown('<div style="text-align:center; margin-bottom:1rem;">', unsafe_allow_html=True)
+    if st.button("🧹 Limpiar filtros", key="clear_btn"):
+        st.session_state.df_fil = st.session_state.df.copy()
+        st.session_state.f1 = st.session_state.f2 = st.session_state.f3 = ""
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# — Formulario de filtros y tabla —
 if "df" in st.session_state:
     df = st.session_state.df
 
-    # Formulario de filtros
     with st.form("filter_form"):
         columna = st.selectbox("Selecciona columna para filtrar", df.columns)
         c1, c2, c3 = st.columns(3)
@@ -97,7 +104,6 @@ if "df" in st.session_state:
                     df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
             st.session_state.df_fil = df_fil
 
-    # Mostrar la tabla filtrada
     st.dataframe(st.session_state.get("df_fil", df), use_container_width=True)
 
 else:
