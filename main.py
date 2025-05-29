@@ -39,7 +39,7 @@ if st.sidebar.button("🔓 Cerrar sesión"):
     st.rerun()
 
 # —————————————————————————————
-# Conexión a Google Sheets usando st.secrets
+# Conexión a Google Sheets
 # —————————————————————————————
 service_info = st.secrets["gcp_service_account"]
 creds = Credentials.from_service_account_info(
