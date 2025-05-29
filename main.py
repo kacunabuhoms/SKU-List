@@ -90,7 +90,7 @@ if "df" in st.session_state:
     with b1:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         csv_orig = df.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 CSV original", csv_orig, "lista_sku_original.csv", "text/csv")
+        st.download_button("📥 Descargar CSV original", csv_orig, "lista_sku_original.csv", "text/csv")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Limpiar filtros (centrado)
@@ -112,7 +112,7 @@ if "df" in st.session_state:
             if txt:
                 df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
         csv_filt = df_fil.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 CSV filtrado", csv_filt, "lista_sku_filtrado.csv", "text/csv")
+        st.download_button("📥 Descargar CSV filtrado", csv_filt, "lista_sku_filtrado.csv", "text/csv")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Mostrar tabla filtrada
