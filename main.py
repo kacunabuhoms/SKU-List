@@ -46,20 +46,25 @@ if st.sidebar.button("Cerrar sesión"):
 # —————————————————————————————————————————
 # LECTURA DE SECRETS PARA GSPREAD & SHEETS
 # —————————————————————————————————————————
-_creds        = st.secrets["credentials"]
-users         = st.secrets["users"]
-SCOPES        = _creds.pop("SCOPES")
-SPREADSHEET_ID = _creds.pop("SPREADSHEET_ID")
-SHEET_URL     = _creds.pop("SHEET_URL")
+raw_creds       = st.secrets["credentials"]
+users           = st.secrets["users"]
+SCOPES          = raw_creds["SCOPES"]
+SPREADSHEET_ID  = raw_creds["SPREADSHEET_ID"]
+SHEET_URL       = raw_creds["SHEET_URL"]
 
 # —————————————————————————————————————————
 # CLIENTE DE GSPREAD
 # —————————————————————————————————————————
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    info = dict(_creds)  # copia para no mutar el original
-    # Reemplaza los literales "\n" por saltos de línea reales
+    # Copiamos a un dict estándar para poder pop()
+    info = dict(raw_creds)
+    # Arreglamos los literales "\n" de la clave privada
     info["private_key"] = info["private_key"].replace("\\n", "\n").strip()
+    # Eliminamos las claves que no son parte del JSON de service-account
+    info.pop("SCOPES", None)
+    info.pop("SPREADSHEET_ID", None)
+    info.pop("SHEET_URL", None)
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
 
@@ -69,9 +74,9 @@ def get_gspread_client():
 @st.cache_data(show_spinner=False)
 def load_sheet_df(sheet_name: str) -> pd.DataFrame:
     client = get_gspread_client()
-    # Usamos el ID para abrir el spreadsheet
-    sheet  = client.open_by_key(SPREADSHEET_ID)
-    ws     = sheet.worksheet(sheet_name)
+    # Abrimos por ID en lugar de URL
+    sheet = client.open_by_key(SPREADSHEET_ID)
+    ws    = sheet.worksheet(sheet_name)
     return pd.DataFrame(ws.get_all_records())
 
 # Botón manual para forzar recarga de datos
