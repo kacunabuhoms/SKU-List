@@ -181,7 +181,7 @@ if "df" in st.session_state:
         )
         st.markdown("</div>", unsafe_allow_html=True)
     # Mostrar la tabla filtrada
-    st.dataframe(df_fil, use_container_width=True)
+    st.dataframe(df_filtrado, use_container_width=True)
 
 else:
     st.info("Pulsa **Cargar datos** para empezar.")
