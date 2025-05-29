@@ -129,16 +129,16 @@ if "df" in st.session_state:
         st.markdown("</div>", unsafe_allow_html=True)
 
     with b2:
-        st.markdown(
-            '<div style="background:#ffadad;padding:8px;border-radius:8px;display:inline-block;">',
-            unsafe_allow_html=True
-        )
-        if st.button("🧹 Limpiar filtros", key="clear_btn"):
-            # eliminamos las keys t1, t2, t3 de session_state
-            for k in ("t1","t2","t3"):
-                st.session_state.pop(k, None)
-            st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+        # st.markdown(
+        #     '<div style="background:#ffadad;padding:8px;border-radius:8px;display:inline-block;">',
+        #     unsafe_allow_html=True
+        # )
+        # if st.button("🧹 Limpiar filtros", key="clear_btn"):
+        #     # eliminamos las keys t1, t2, t3 de session_state
+        #     for k in ("t1","t2","t3"):
+        #         st.session_state.pop(k, None)
+        #     st.rerun()
+        # st.markdown("</div>", unsafe_allow_html=True)
 
     with b3:
         st.markdown(
