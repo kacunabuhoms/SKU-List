@@ -4,7 +4,7 @@ import io
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 # ————— Configuración de página —————
 st.set_page_config(page_title="Lista SKU", layout="wide")
@@ -51,17 +51,15 @@ FILE_ID = "11EXtk3uMcOJn74YhoZP0e8EQ1aDPCVJD"
 
 @st.cache_data(ttl=600)
 def cargar_datos() -> pd.DataFrame:
-    # Descarga el archivo XLSX completo
-    buffer = io.BytesIO()
+    buf = io.BytesIO()
     request = drive.files().get_media(fileId=FILE_ID)
-    downloader = MediaIoBaseDownload(buffer, request)
+    downloader = MediaIoBaseDownload(buf, request)
     done = False
     while not done:
         _, done = downloader.next_chunk()
-    buffer.seek(0)
-    # Lee la hoja "Lista_SKU", header en fila 2, columnas B y C
+    buf.seek(0)
     df = pd.read_excel(
-        buffer,
+        buf,
         sheet_name="Lista_SKU",
         header=1,
         usecols="B:C"
@@ -73,7 +71,6 @@ def cargar_datos() -> pd.DataFrame:
 # —————————————————————————————
 st.title("📊 Lista SKU desde archivo XLSX con filtros y descarga")
 
-# 1) Botón de carga
 if "df" not in st.session_state:
     if st.button("🔄 Cargar datos"):
         with st.spinner("Descargando y leyendo XLSX…"):
@@ -82,20 +79,15 @@ if "df" not in st.session_state:
 
 if "df" in st.session_state:
     df = st.session_state.df.copy()
-
-    # Selector de columna
     columna = st.selectbox("Selecciona columna para filtrar", df.columns)
 
-    # Tres filtros
     c1, c2, c3 = st.columns(3)
     t1 = c1.text_input("Filtro 1", value=st.session_state.get("t1",""), key="t1")
     t2 = c2.text_input("Filtro 2", value=st.session_state.get("t2",""), key="t2")
     t3 = c3.text_input("Filtro 3", value=st.session_state.get("t3",""), key="t3")
 
-    # Tres columnas de botones
     b1, b2, b3 = st.columns(3)
-
-    # — Descargar archivo XLSX original —
+    # Descargar XLSX original
     with b1:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         buf2 = io.BytesIO()
@@ -106,14 +98,14 @@ if "df" in st.session_state:
             _, done2 = dl2.next_chunk()
         buf2.seek(0)
         st.download_button(
-            label="📥 Descargar XLSX original",
+            "📥 Descargar XLSX original",
             data=buf2,
             file_name="archivo_completo.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # — Limpiar filtros —
+    # Limpiar filtros
     with b2:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         if st.button("🧹 Limpiar filtros", key="clear_btn"):
@@ -122,7 +114,7 @@ if "df" in st.session_state:
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # — Descargar CSV filtrado —
+    # Descargar CSV filtrado
     with b3:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         df_fil = df
@@ -131,33 +123,18 @@ if "df" in st.session_state:
                 df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
         csv = df_fil.to_csv(index=False).encode("utf-8")
         st.download_button(
-            label="📥 Descargar CSV filtrado",
+            "📥 Descargar CSV filtrado",
             data=csv,
             file_name="lista_sku_filtrado.csv",
             mime="text/csv"
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # — Mostrar y permitir copiar celdas con AgGrid —
-    st.markdown("### Tabla filtrada (clic en la celda para copiar)")
-
-    # Configuración de AgGrid
+    # Mostrar con AgGrid: habilitamos selección de texto y rango
+    st.markdown("### Tabla filtrada (selecciona la celda y presiona Ctrl+C para copiar)")
     gb = GridOptionsBuilder.from_dataframe(df_fil)
     gb.configure_default_column(enableCellTextSelection=True)
-    copy_js = JsCode("""
-    class CopyRenderer {
-      init(params) {
-        this.eGui = document.createElement('div');
-        this.eGui.innerHTML = `<span style="cursor:pointer;">${params.value}</span>`;
-        this.eGui.addEventListener('click', () => {
-          navigator.clipboard.writeText(params.value);
-        });
-      }
-      getGui() { return this.eGui; }
-    }
-    """)
-    for col in df_fil.columns:
-        gb.configure_column(col, cellRenderer=copy_js)
+    gb.configure_grid_options(enableRangeSelection=True)
     grid_opts = gb.build()
 
     AgGrid(
@@ -167,6 +144,5 @@ if "df" in st.session_state:
         fit_columns_on_grid_load=True,
         height=400,
     )
-
 else:
     st.info("Pulsa **Cargar datos** para empezar.")
