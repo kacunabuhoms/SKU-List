@@ -4,8 +4,6 @@ import io
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from st_aggrid import AgGrid, GridOptionsBuilder
-import streamlit.components.v1 as components
 
 # ————— Configuración de página —————
 st.set_page_config(page_title="Lista SKU", layout="wide")
@@ -52,20 +50,28 @@ FILE_ID = "11EXtk3uMcOJn74YhoZP0e8EQ1aDPCVJD"
 
 @st.cache_data(ttl=600)
 def cargar_datos() -> pd.DataFrame:
-    buf = io.BytesIO()
-    req = drive.files().get_media(fileId=FILE_ID)
-    dl = MediaIoBaseDownload(buf, req)
+    # Descarga el archivo XLSX completo
+    buffer = io.BytesIO()
+    request = drive.files().get_media(fileId=FILE_ID)
+    downloader = MediaIoBaseDownload(buffer, request)
     done = False
     while not done:
-        _, done = dl.next_chunk()
-    buf.seek(0)
-    df = pd.read_excel(buf, sheet_name="Lista_SKU", header=1, usecols="B:C")
+        _, done = downloader.next_chunk()
+    buffer.seek(0)
+    # Lee la hoja "Lista_SKU", indicando que el header real está en la fila 2 (index 1),
+    # y que queremos sólo las columnas B y C.
+    df = pd.read_excel(
+        buffer,
+        sheet_name="Lista_SKU",
+        header=1,        # fila 2 como header
+        usecols="B:C"
+    )
     return df
 
 # —————————————————————————————
 # UI principal
 # —————————————————————————————
-st.title("📊 Lista SKU desde archivo XLSX con filtros y copia rápida")
+st.title("📊 Lista SKU desde archivo XLSX con filtros y descarga")
 
 # 1) Botón de carga
 if "df" not in st.session_state:
@@ -76,16 +82,20 @@ if "df" not in st.session_state:
 
 if "df" in st.session_state:
     df = st.session_state.df.copy()
+
+    # Selector de columna
     columna = st.selectbox("Selecciona columna para filtrar", df.columns)
 
-    # Tres filtros
+    # Tres filtros en fila
     c1, c2, c3 = st.columns(3)
     t1 = c1.text_input("Filtro 1", value=st.session_state.get("t1",""), key="t1")
     t2 = c2.text_input("Filtro 2", value=st.session_state.get("t2",""), key="t2")
     t3 = c3.text_input("Filtro 3", value=st.session_state.get("t3",""), key="t3")
 
-    # Botones XLSX original / limpiar / CSV filtrado
+    # Botones en 3 columnas
     b1, b2, b3 = st.columns(3)
+
+    # — Descargar archivo XLSX original —
     with b1:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         buf2 = io.BytesIO()
@@ -96,18 +106,23 @@ if "df" in st.session_state:
             _, done2 = dl2.next_chunk()
         buf2.seek(0)
         st.download_button(
-            "📥 Descargar XLSX original",
+            label="📥 Descargar Archivo Original",
             data=buf2,
             file_name="archivo_completo.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # — Limpiar filtros —
     with b2:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         if st.button("🧹 Limpiar filtros", key="clear_btn"):
-            for k in ("t1","t2","t3"): st.session_state.pop(k, None)
+            for k in ("t1","t2","t3"):
+                st.session_state.pop(k, None)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # — Descargar CSV filtrado —
     with b3:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
         df_fil = df
@@ -116,51 +131,14 @@ if "df" in st.session_state:
                 df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
         csv = df_fil.to_csv(index=False).encode("utf-8")
         st.download_button(
-            "📥 Descargar CSV filtrado",
+            label="📥 Descargar CSV filtrado",
             data=csv,
             file_name="lista_sku_filtrado.csv",
             mime="text/csv"
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # — AgGrid con selección de fila única —
-    st.markdown("### Selecciona una fila para copiar valores")
-    gb = GridOptionsBuilder.from_dataframe(df_fil)
-    gb.configure_selection(selection_mode="single", use_checkbox=True)
-    gb.configure_default_column(resizable=True, filter=True)
-    grid_opts = gb.build()
-    grid_resp = AgGrid(
-        df_fil,
-        gridOptions=grid_opts,
-        enable_enterprise_modules=False,
-        fit_columns_on_grid_load=True,
-        height=300,
-        allow_unsafe_jscode=True
-    )
-
-    selected = grid_resp["selected_rows"]
-    if selected:
-        row = selected[0]  # diccionario con claves = nombres columnas
-        # Botones para copiar
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📋 Copiar Nombre Largo"):
-                txt = row[df_fil.columns[0]]
-                components.html(f"""
-                <script>
-                  navigator.clipboard.writeText({txt!r});
-                </script>
-                """)
-                st.success("Nombre Largo copiado!")
-        with col2:
-            if st.button("📋 Copiar SKU"):
-                txt = row[df_fil.columns[1]]
-                components.html(f"""
-                <script>
-                  navigator.clipboard.writeText({txt!r});
-                </script>
-                """)
-                st.success("SKU copiado!")
-
+    # Mostrar tabla filtrada
+    st.dataframe(df_fil, use_container_width=True)
 else:
     st.info("Pulsa **Cargar datos** para empezar.")
