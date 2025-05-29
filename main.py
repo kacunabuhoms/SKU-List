@@ -128,7 +128,7 @@ if "df" in st.session_state:
         st.download_button("📥 CSV original", csv_orig, "lista_sku_original.csv", "text/csv")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    with b2:
+    # with b2:
         # st.markdown(
         #     '<div style="background:#ffadad;padding:8px;border-radius:8px;display:inline-block;">',
         #     unsafe_allow_html=True
