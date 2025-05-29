@@ -59,7 +59,7 @@ def cargar_datos() -> pd.DataFrame:
 # ————— UI principal —————
 st.title("📊 Lista SKU")
 
-# Descargar XLSX original (y carga datos)
+# Descargar XLSX original (carga datos)
 buf2 = io.BytesIO()
 req2 = drive.files().get_media(fileId=FILE_ID)
 dl2 = MediaIoBaseDownload(buf2, req2)
@@ -67,9 +67,8 @@ done2 = False
 while not done2:
     _, done2 = dl2.next_chunk()
 buf2.seek(0)
-
 if st.download_button(
-    label="📥 Descargar XLSX original",
+    "📥 Descargar XLSX original",
     data=buf2,
     file_name="archivo_completo.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -80,32 +79,34 @@ if st.download_button(
 if "df" in st.session_state:
     df = st.session_state.df
 
-    # — Formulario con Aplicar y Limpiar en dos columnas —
+    def _clear():
+        # esto corre antes de que se vuelvan a dibujar los text_input
+        st.session_state.f1 = ""
+        st.session_state.f2 = ""
+        st.session_state.f3 = ""
+        st.session_state.df_fil = df.copy()
+
+    def _apply():
+        df_fil = df
+        for txt in (st.session_state.f1, st.session_state.f2, st.session_state.f3):
+            if txt:
+                df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
+        st.session_state.df_fil = df_fil
+
+    # Formulario de filtros con dos botones en columnas 1 y 3
     with st.form("filter_form"):
         columna = st.selectbox("Selecciona columna para filtrar", df.columns)
         c1, c2, c3 = st.columns(3)
-        t1 = c1.text_input("Filtro 1", key="f1")
-        t2 = c2.text_input("Filtro 2", key="f2")
-        t3 = c3.text_input("Filtro 3", key="f3")
+        c1.text_input("Filtro 1", key="f1")
+        c2.text_input("Filtro 2", key="f2")
+        c3.text_input("Filtro 3", key="f3")
 
-        # dos botones en las columnas 1 y 3
-        f1, _, f3 = st.columns([1,1,1])
-        aplicar = f1.form_submit_button("Aplicar filtros")
-        limpiar = f3.form_submit_button("Limpiar filtros")
+        f1, _, f3 = st.columns(3)
+        f1.form_submit_button("Aplicar filtros", on_click=_apply)
+        f3.form_submit_button("Limpiar filtros", on_click=_clear)
 
-        if limpiar:
-            st.session_state.f1 = ""
-            st.session_state.f2 = ""
-            st.session_state.f3 = ""
-            st.session_state.df_fil = df.copy()
-        elif aplicar:
-            df_fil = df
-            for txt in (t1, t2, t3):
-                if txt:
-                    df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
-            st.session_state.df_fil = df_fil
-
-    # — Mostrar tabla filtrada —
+    # Mostrar la tabla filtrada
     st.dataframe(st.session_state.get("df_fil", df), use_container_width=True)
+
 else:
     st.info("Pulsa **📥 Descargar XLSX original** para cargar los datos.")
