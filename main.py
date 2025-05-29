@@ -45,7 +45,7 @@ drive = build("drive", "v3", credentials=creds)
 FILE_ID = "11EXtk3uMcOJn74YhoZP0e8EQ1aDPCVJD"
 
 @st.cache_data(ttl=600)
-def cargar_datos() -> pd.DataFrame:
+def cargar_datos():
     buf = io.BytesIO()
     req = drive.files().get_media(fileId=FILE_ID)
     dl = MediaIoBaseDownload(buf, req)
@@ -53,60 +53,71 @@ def cargar_datos() -> pd.DataFrame:
     while not done:
         _, done = dl.next_chunk()
     buf.seek(0)
-    df = pd.read_excel(buf, sheet_name="Lista_SKU", header=1, usecols="B:C")
-    return df
+    # Header real en fila 2, columnas B:C
+    return pd.read_excel(buf, sheet_name="Lista_SKU", header=1, usecols="B:C")
 
 # ————— UI principal —————
 st.title("📊 Lista SKU")
 
-# Descargar XLSX original (carga datos)
-buf2 = io.BytesIO()
-req2 = drive.files().get_media(fileId=FILE_ID)
-dl2 = MediaIoBaseDownload(buf2, req2)
-done2 = False
-while not done2:
-    _, done2 = dl2.next_chunk()
-buf2.seek(0)
-if st.download_button(
-    "📥 Descargar XLSX original",
-    data=buf2,
-    file_name="archivo_completo.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-):
-    st.session_state.df     = cargar_datos()
-    st.session_state.df_fil = st.session_state.df.copy()
+if "df" not in st.session_state:
+    if st.button("🔄 Cargar Datos"):
+        with st.spinner("Descargando y leyendo XLSX…"):
+            df = cargar_datos()
+            st.session_state.df     = df
+            st.session_state.df_fil = df.copy()
+            # inicializa filtros vacíos
+            st.session_state.f1 = ""
+            st.session_state.f2 = ""
+            st.session_state.f3 = ""
+        st.success(f"Datos cargados: {len(df)} filas")
+else:
+    # una vez cargados, ocultamos "Cargar Datos" y mostramos "Descargar XLSX original"
+    buf2 = io.BytesIO()
+    req2 = drive.files().get_media(fileId=FILE_ID)
+    dl2 = MediaIoBaseDownload(buf2, req2)
+    done2 = False
+    while not done2:
+        _, done2 = dl2.next_chunk()
+    buf2.seek(0)
+    st.markdown('<div style="text-align:center; margin-bottom:1rem;">', unsafe_allow_html=True)
+    st.download_button(
+        "📥 Descargar XLSX original",
+        data=buf2,
+        file_name="archivo_completo.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-if "df" in st.session_state:
-    df = st.session_state.df
-
+    # funciones para los botones del formulario
     def _clear():
-        # esto corre antes de que se vuelvan a dibujar los text_input
         st.session_state.f1 = ""
         st.session_state.f2 = ""
         st.session_state.f3 = ""
-        st.session_state.df_fil = df.copy()
+        st.session_state.df_fil = st.session_state.df.copy()
 
     def _apply():
+        df = st.session_state.df
         df_fil = df
         for txt in (st.session_state.f1, st.session_state.f2, st.session_state.f3):
             if txt:
-                df_fil = df_fil[df_fil[columna].str.contains(txt, case=False, na=False)]
+                df_fil = df_fil[
+                    df_fil[st.session_state.columna].str.contains(txt, case=False, na=False)
+                ]
         st.session_state.df_fil = df_fil
 
-    # Formulario de filtros con dos botones en columnas 1 y 3
+    # — Formulario de filtros con dos botones en columnas opuestas —
     with st.form("filter_form"):
-        columna = st.selectbox("Selecciona columna para filtrar", df.columns)
+        st.session_state.columna = st.selectbox(
+            "Selecciona columna para filtrar",
+            st.session_state.df.columns
+        )
         c1, c2, c3 = st.columns(3)
         c1.text_input("Filtro 1", key="f1")
         c2.text_input("Filtro 2", key="f2")
         c3.text_input("Filtro 3", key="f3")
-
         f1, _, f3 = st.columns(3)
         f1.form_submit_button("Aplicar filtros", on_click=_apply)
         f3.form_submit_button("Limpiar filtros", on_click=_clear)
 
-    # Mostrar la tabla filtrada
-    st.dataframe(st.session_state.get("df_fil", df), use_container_width=True)
-
-else:
-    st.info("Pulsa **📥 Descargar XLSX original** para cargar los datos.")
+    # — Mostrar tabla filtrada —
+    st.dataframe(st.session_state.df_fil, use_container_width=True)
