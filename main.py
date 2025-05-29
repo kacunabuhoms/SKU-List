@@ -36,7 +36,6 @@ if not st.session_state.authenticated:
     if not st.session_state.authenticated:
         st.stop()
 
-# Sidebar con usuario y botón de logout
 st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
@@ -46,19 +45,24 @@ if st.sidebar.button("Cerrar sesión"):
 # —————————————————————————————————————————
 # LECTURA DE SECRETS PARA GSPREAD & SHEETS
 # —————————————————————————————————————————
-creds_info = st.secrets["credentials"]
-scopes     = creds_info["SCOPES"]
-sheet_id   = creds_info["SPREADSHEET_ID"]
+_raw_creds = st.secrets["credentials"]
+# Convierte el SecretManager a dict puro
+creds_dict = dict(_raw_creds)
+# Extrae aquí SCOPES y SPREADSHEET_ID
+SCOPES      = creds_dict.pop("SCOPES")
+SPREADSHEET_ID = creds_dict.pop("SPREADSHEET_ID")
 
 # —————————————————————————————————————————
 # CLIENTE DE GSPREAD
 # —————————————————————————————————————————
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    info = creds_info.copy()
+    # Otra copia para no mutar el original
+    info = dict(creds_dict)
+    # Streamlit a veces agrega espacios alrededor de la llave
     info["private_key"] = info["private_key"].strip()
-    creds = Credentials.from_service_account_info(info, scopes=scopes)
-    return gspread.authorize(creds)
+    credentials = Credentials.from_service_account_info(info, scopes=SCOPES)
+    return gspread.authorize(credentials)
 
 # —————————————————————————————————————————
 # CARGAR DATOS DE LA HOJA
@@ -66,7 +70,7 @@ def get_gspread_client():
 @st.cache_data(show_spinner=False)
 def load_sheet_df(sheet_name: str) -> pd.DataFrame:
     client = get_gspread_client()
-    ws     = client.open_by_key(sheet_id).worksheet(sheet_name)
+    ws     = client.open_by_key(SPREADSHEET_ID).worksheet(sheet_name)
     records = ws.get_all_records()
     return pd.DataFrame(records)
 
