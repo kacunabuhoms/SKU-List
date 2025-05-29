@@ -17,23 +17,20 @@ if "authenticated" not in st.session_state:
 if not st.session_state.authenticated:
     with st.form("login_form"):
         st.markdown("### 🔐 Iniciar sesión")
-        email    = st.text_input("Correo electrónico")
-        password = st.text_input("Contraseña", type="password")
+        email     = st.text_input("Correo electrónico")
+        password  = st.text_input("Contraseña", type="password")
         submitted = st.form_submit_button("Ingresar")
 
         if submitted:
             users = st.secrets.get("users", {})
-            key = email.strip().lower().replace("@", "_").replace(".", "_")
+            key   = email.strip().lower().replace("@", "_").replace(".", "_")
             if users.get(key) == password:
                 st.session_state.authenticated = True
-                st.session_state.user = email
+                st.session_state.user          = email
                 st.success(f"Bienvenido, {email} 👋")
-                # ya no llamamos a experimental_rerun(): 
-                # el resto del script solo se ejecutará después de este bloque
             else:
                 st.error("Correo o contraseña incorrectos.")
 
-    # detenemos aquí la ejecución si NO está autenticado
     if not st.session_state.authenticated:
         st.stop()
 
@@ -45,12 +42,12 @@ st.title("🦉 Filtro de Lista de SKUs")
 st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
-    st.session_state.user = ""
-    st.experimental_rerun()  # este sí suele existir para reiniciar
+    st.session_state.user          = ""
+    st.experimental_rerun()
 
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-GOOGLE_DRIVE_FILE_ID = st.secrets["sheets"]["file_id"]
-LOCAL_FILENAME = "OT_6143.xlsx"
+SCOPES                  = ['https://www.googleapis.com/auth/drive.readonly']
+GOOGLE_DRIVE_FILE_ID    = st.secrets["sheets"]["file_id"]
+LOCAL_FILENAME          = "OT_6143.xlsx"
 
 def auth_drive():
     creds = None
@@ -107,7 +104,58 @@ with col2:
 
 if st.session_state.get("archivo"):
     df_raw = pd.read_excel(st.session_state.archivo, sheet_name="LISTA SKU")
-    # …aquí sigue tu lógica de renombrar columnas, filtros y mostrar el dataframe…
 
+    # Renombrar columnas
+    if "Unnamed: 1" in df_raw.columns and "Unnamed: 2" in df_raw.columns:
+        df = df_raw.rename(columns={
+            "Unnamed: 1": "Nombre Largo",
+            "Unnamed: 2": "SKU"
+        })[["Nombre Largo", "SKU"]]
+    else:
+        st.error("❌ No se encontraron las columnas necesarias.")
+        st.stop()
+
+    df = df[df["SKU"].notna()]
+    df = df[df["Nombre Largo"].str.lower() != "nombre largo"]
+
+    # Filtros
+    def clean(text):
+        if isinstance(text, str):
+            return text.lower().strip().replace("\xa0", " ").replace(" ", " ")
+        return ""
+
+    columns_map = {"Nombre Largo": "Nombre Largo", "SKU": "SKU"}
+    col_a, col_b, col_c, col_d = st.columns([3,2,2,2])
+
+    with col_a:
+        column_selection = st.selectbox("Columna", list(columns_map.keys()))
+    with col_b:
+        filter1 = st.text_input("Campo 1").strip().lower()
+    with col_c:
+        filter2 = st.text_input("Campo 2").strip().lower()
+    with col_d:
+        filter3 = st.text_input("Campo 3").strip().lower()
+
+    selected_column = columns_map[column_selection]
+
+    def passes_filters(text):
+        text = clean(text)
+        return all(f in text for f in [filter1, filter2, filter3] if f)
+
+    filtered_df = df[df[selected_column].apply(passes_filters)]
+
+    # Mostrar resultados
     st.subheader("📋 Resultados filtrados")
-    st.dataframe(df_raw)
+    st.write(f"Total encontrados: {len(filtered_df)}")
+    st.dataframe(filtered_df)
+
+    # Botón para descargar resultados filtrados
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        filtered_df.to_excel(writer, index=False, sheet_name="Filtrado")
+    st.download_button(
+        label="📥 Descargar resultados",
+        data=buffer.getvalue(),
+        file_name="filtrado_sku.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
