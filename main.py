@@ -36,7 +36,7 @@ if st.sidebar.button("🔓 Cerrar sesión"):
     st.rerun()
 
 # —————————————————————————————
-# Configuración de Drive API
+# Conexión a Google Drive vía API
 # —————————————————————————————
 service_info = st.secrets["gcp_service_account"]
 creds = Credentials.from_service_account_info(
@@ -58,8 +58,14 @@ def cargar_datos() -> pd.DataFrame:
     while not done:
         _, done = downloader.next_chunk()
     buffer.seek(0)
-    # Lee la hoja "Lista_SKU", asumiendo que headers están en la primera fila
-    df = pd.read_excel(buffer, sheet_name="Lista_SKU", header=0, usecols="B:C")
+    # Lee la hoja "Lista_SKU", indicando que el header real está en la fila 2 (index 1),
+    # y que queremos sólo las columnas B y C.
+    df = pd.read_excel(
+        buffer,
+        sheet_name="Lista_SKU",
+        header=1,        # fila 2 como header
+        usecols="B:C"
+    )
     return df
 
 # —————————————————————————————
@@ -92,7 +98,6 @@ if "df" in st.session_state:
     # — Descargar archivo XLSX original —
     with b1:
         st.markdown('<div style="text-align:center">', unsafe_allow_html=True)
-        # Re-descargamos el mismo buffer para ofrecerlo
         buf2 = io.BytesIO()
         req2 = drive.files().get_media(fileId=FILE_ID)
         dl2 = MediaIoBaseDownload(buf2, req2)
@@ -135,6 +140,5 @@ if "df" in st.session_state:
 
     # Mostrar tabla filtrada
     st.dataframe(df_fil, use_container_width=True)
-
 else:
     st.info("Pulsa **Cargar datos** para empezar.")
