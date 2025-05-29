@@ -4,7 +4,6 @@ import io
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 # ————— Configuración de página —————
 st.set_page_config(page_title="Lista SKU", layout="wide")
@@ -59,11 +58,12 @@ def cargar_datos() -> pd.DataFrame:
     while not done:
         _, done = downloader.next_chunk()
     buffer.seek(0)
-    # Lee la hoja "Lista_SKU", header en fila 2, columnas B y C
+    # Lee la hoja "Lista_SKU", indicando que el header real está en la fila 2 (index 1),
+    # y que queremos sólo las columnas B y C.
     df = pd.read_excel(
         buffer,
         sheet_name="Lista_SKU",
-        header=1,
+        header=1,        # fila 2 como header
         usecols="B:C"
     )
     return df
@@ -86,13 +86,13 @@ if "df" in st.session_state:
     # Selector de columna
     columna = st.selectbox("Selecciona columna para filtrar", df.columns)
 
-    # Tres filtros
+    # Tres filtros en fila
     c1, c2, c3 = st.columns(3)
     t1 = c1.text_input("Filtro 1", value=st.session_state.get("t1",""), key="t1")
     t2 = c2.text_input("Filtro 2", value=st.session_state.get("t2",""), key="t2")
     t3 = c3.text_input("Filtro 3", value=st.session_state.get("t3",""), key="t3")
 
-    # Tres columnas de botones
+    # Botones en 3 columnas
     b1, b2, b3 = st.columns(3)
 
     # — Descargar archivo XLSX original —
@@ -106,7 +106,7 @@ if "df" in st.session_state:
             _, done2 = dl2.next_chunk()
         buf2.seek(0)
         st.download_button(
-            label="📥 Descargar XLSX original",
+            label="📥 Descargar Archivo Original",
             data=buf2,
             file_name="archivo_completo.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -138,35 +138,7 @@ if "df" in st.session_state:
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # — Mostrar y permitir copiar celdas con AgGrid —
-    st.markdown("### Tabla filtrada (clic en la celda para copiar)")
-
-    # Configuración de AgGrid
-    gb = GridOptionsBuilder.from_dataframe(df_fil)
-    gb.configure_default_column(enableCellTextSelection=True)
-    copy_js = JsCode("""
-    class CopyRenderer {
-      init(params) {
-        this.eGui = document.createElement('div');
-        this.eGui.innerHTML = `<span style="cursor:pointer;">${params.value}</span>`;
-        this.eGui.addEventListener('click', () => {
-          navigator.clipboard.writeText(params.value);
-        });
-      }
-      getGui() { return this.eGui; }
-    }
-    """)
-    for col in df_fil.columns:
-        gb.configure_column(col, cellRenderer=copy_js)
-    grid_opts = gb.build()
-
-    AgGrid(
-        df_fil,
-        gridOptions=grid_opts,
-        enable_enterprise_modules=False,
-        fit_columns_on_grid_load=True,
-        height=400,
-    )
-
+    # Mostrar tabla filtrada
+    st.dataframe(df_fil, use_container_width=True)
 else:
     st.info("Pulsa **Cargar datos** para empezar.")
