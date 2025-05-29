@@ -1,105 +1,112 @@
 import streamlit as st
 import pandas as pd
-import io
-import json
-import gspread
-from google.oauth2.service_account import Credentials
+import io, os, pickle, json
 
-# —————————————————————————————————————————
-# Página y Login
-# —————————————————————————————————————————
-st.set_page_config(page_title="🦉 Filtro de SKUs", layout="wide")
-if "user" not in st.session_state:
-    st.session_state.user = None
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 
-if not st.session_state.user:
-    form = st.form("login")
-    email = form.text_input("Correo")
-    pwd   = form.text_input("Contraseña", type="password")
-    if form.form_submit_button("Ingresar"):
-        users = st.secrets["users"]
-        if email.lower() in users and users[email.lower()] == pwd:
-            st.session_state.user = email.lower()
-        else:
-            st.error("Usuario o contraseña inválidos")
+# ————————————————
+# LOGIN MULTIUSUARIO
+# ————————————————
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.user = ""
+
+if not st.session_state.authenticated:
+    with st.form("login_form"):
+        st.markdown("### 🔐 Iniciar sesión")
+        email = st.text_input("Correo electrónico")
+        password = st.text_input("Contraseña", type="password")
+        submitted = st.form_submit_button("Ingresar")
+
+        if submitted:
+            # obtener el dict de usuarios de secrets
+            users = st.secrets.get("users", {})
+            # normalizar la clave
+            key = email.strip().lower().replace("@", "_").replace(".", "_")
+            if users.get(key) == password:
+                st.session_state.authenticated = True
+                st.session_state.user = email
+                st.success(f"Bienvenido, {email} 👋")
+                st.experimental_rerun()
+            else:
+                st.error("Correo o contraseña incorrectos.")
     st.stop()
 
-st.sidebar.write(f"👤 {st.session_state.user}")
-if st.sidebar.button("Logout"):
-    st.session_state.clear()
+# ————————————————
+# CONFIGURACIÓN GENERAL
+# ————————————————
+st.set_page_config(page_title="Filtro de SKUs", layout="wide")
+st.title("🦉 Filtro de Lista de SKUs")
+st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
+if st.sidebar.button("Cerrar sesión"):
+    st.session_state.authenticated = False
+    st.session_state.user = ""
     st.experimental_rerun()
 
-# —————————————————————————————————————————
-# Carga de credenciales desde Secrets
-# —————————————————————————————————————————
-creds_block      = st.secrets["credentials"]
-info_json        = json.loads(creds_block["service_account_json"])
-SCOPES           = creds_block["SCOPES"]
-SPREADSHEET_ID   = creds_block["SPREADSHEET_ID"]
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+GOOGLE_DRIVE_FILE_ID = st.secrets["sheets"]["file_id"]
+LOCAL_FILENAME = "OT_6143.xlsx"
 
-# —————————————————————————————————————————
-# Cliente GSpread
-# —————————————————————————————————————————
-@st.cache_resource(show_spinner=False)
-def get_client():
-    creds = Credentials.from_service_account_info(info_json, scopes=SCOPES)
-    return gspread.authorize(creds)
+# ————————————————
+# AUTH / DESCARGA
+# ————————————————
+def auth_drive():
+    creds = None
+    if os.path.exists('token.pkl'):
+        with open('token.pkl', 'rb') as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            credentials_dict = json.loads(st.secrets["credentials_json"])
+            flow = InstalledAppFlow.from_client_config(credentials_dict, SCOPES)
+            creds = flow.run_local_server(port=8080)
+        with open('token.pkl', 'wb') as token:
+            pickle.dump(creds, token)
+    return creds
 
-# —————————————————————————————————————————
-# Leer hoja a DataFrame
-# —————————————————————————————————————————
-@st.cache_data(show_spinner=False)
-def load_df(sheet_name: str) -> pd.DataFrame:
-    client = get_client()
-    sh     = client.open_by_key(SPREADSHEET_ID)
-    ws     = sh.worksheet(sheet_name)
-    return pd.DataFrame(ws.get_all_records())
+def descargar_excel_drive(file_id, local_filename):
+    creds = auth_drive()
+    service = build('drive', 'v3', credentials=creds)
+    request = service.files().get_media(fileId=file_id)
+    fh = io.FileIO(local_filename, 'wb')
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    fh.close()
+    return local_filename
 
-# —————————————————————————————————————————
-# Interfaz
-# —————————————————————————————————————————
-if st.button("🔄 Recargar datos"):
-    load_df.clear()
-    st.success("Datos recargados")
+# ————————————————
+# INTERFAZ
+# ————————————————
+st.markdown("### 📦 Archivo de Datos desde DDV")
+col1, col2 = st.columns(2)
 
-try:
-    df_raw = load_df("LISTA SKU")
-except Exception as e:
-    st.error(f"❌ Error leyendo la hoja: {e}")
-    st.stop()
+with col1:
+    if st.button("📥 Cargar y procesar archivo"):
+        try:
+            descargar_excel_drive(GOOGLE_DRIVE_FILE_ID, LOCAL_FILENAME)
+            st.success("Archivo descargado y listo para procesar.")
+            st.session_state.archivo = LOCAL_FILENAME
+        except Exception as e:
+            st.error(f"❌ Error al descargar: {e}")
 
-# Renombrar columnas si vienen “Unnamed”
-cols = df_raw.columns.tolist()
-if len(cols) >= 3 and cols[1].startswith("Unnamed"):
-    df = (
-        df_raw
-        .rename(columns={cols[1]:"Nombre Largo", cols[2]:"SKU"})
-        [["Nombre Largo","SKU"]]
-    )
-else:
-    df = df_raw[["Nombre Largo","SKU"]].copy()
+with col2:
+    if os.path.exists(LOCAL_FILENAME):
+        with open(LOCAL_FILENAME, "rb") as f:
+            st.download_button(
+                "📤 Descargar original",
+                data=f,
+                file_name=LOCAL_FILENAME,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
-df = df[df["SKU"].notna()]
-
-st.title("🦉 Filtro de SKUs")
-col1, col2, col3, col4 = st.columns([3,2,2,2])
-sel = col1.selectbox("Columna", ["Nombre Largo","SKU"])
-f1  = col2.text_input("Filtro 1").lower().strip()
-f2  = col3.text_input("Filtro 2").lower().strip()
-f3  = col4.text_input("Filtro 3").lower().strip()
-
-def passes(s):
-    s = str(s).lower()
-    return all(f in s for f in (f1,f2,f3) if f)
-
-df_f = df[df[sel].apply(passes)]
-
-st.write(f"**{len(df_f)}** resultados")
-st.dataframe(df_f, use_container_width=True)
-
-# Botón de descarga Excel
-buf = io.BytesIO()
-with pd.ExcelWriter(buf, engine="xlsxwriter") as w:
-    df_f.to_excel(w, index=False, sheet_name="Filtrado")
-buf.seek(0)
-st.download_button("📥 Descargar (.xlsx)", buf, "skus_filtrados.xlsx")
+if st.session_state.get("archivo"):
+    df_raw = pd.read_excel(st.session_state.archivo, sheet_name="LISTA SKU")
+    # (… resto de tu lógica de filtrado …)
+    st.dataframe(df_raw)
