@@ -55,9 +55,15 @@ sheet_id     = st.secrets["SPREADSHEET_ID"]
 # —————————————————————————————————————————
 # CLIENTE DE GSPREAD
 # —————————————————————————————————————————
+
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    # Cargamos el dict de credenciales
+    creds_info = st.secrets["credentials"].copy()
+    # Quitamos posibles espacios o saltos antes o después del PEM
+    creds_info["private_key"] = creds_info["private_key"].strip()
+    # Y ahora autorizamos
+    creds = Credentials.from_service_account_info(creds_info, scopes=st.secrets["SCOPES"])
     return gspread.authorize(creds)
 
 # —————————————————————————————————————————
