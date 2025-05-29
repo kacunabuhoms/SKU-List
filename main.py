@@ -3,8 +3,26 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-st.set_page_config(layout="wide")
+# ————— Configuración de página —————
+st.set_page_config(page_title="Lista SKU", layout="wide")
 
+# ————— Autenticación simple —————
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    with st.form("login_form", clear_on_submit=False):
+        st.markdown("## 🔐 Iniciar sesión")
+        email = st.text_input("Usuario (email)")
+        password = st.text_input("Contraseña", type="password")
+        submit = st.form_submit_button("Entrar")
+        if submit:
+            if email == "kacuna@buhoms.com" and password == "a":
+                st.session_state.authenticated = True
+                st.experimental_rerun()
+            else:
+                st.error("Usuario o contraseña incorrectos.")
+    st.stop()  # detiene aquí si no está autenticado
 # —————————————————————————————
 # 1) CREDENCIALES DE GOOGLE EMBEBIDAS
 # —————————————————————————————
@@ -72,7 +90,7 @@ def cargar_datos() -> pd.DataFrame:
     return pd.DataFrame(values, columns=header)
 
 # —————————————————————————————
-# 3) INTERFAZ STREAMLIT
+# 3) INTERFAZ STREAMLIT PRINCIPAL
 # —————————————————————————————
 st.title("📊 Lista SKU con filtros y descarga")
 
