@@ -37,7 +37,7 @@ if st.sidebar.button("🔓 Cerrar sesión"):
 
 # ————— Drive API setup —————
 service_info = st.secrets["gcp_service_account"]
-creds = Credentials.from_service_account_info(
+creds        = Credentials.from_service_account_info(
     service_info,
     scopes=["https://www.googleapis.com/auth/drive.readonly"]
 )
@@ -48,38 +48,41 @@ FILE_ID = "11EXtk3uMcOJn74YhoZP0e8EQ1aDPCVJD"
 def cargar_datos():
     buf = io.BytesIO()
     req = drive.files().get_media(fileId=FILE_ID)
-    dl = MediaIoBaseDownload(buf, req)
+    dl  = MediaIoBaseDownload(buf, req)
     done = False
     while not done:
         _, done = dl.next_chunk()
     buf.seek(0)
-    # Header real en fila 2, columnas B:C
     return pd.read_excel(buf, sheet_name="Lista_SKU", header=1, usecols="B:C")
 
 # ————— UI principal —————
 st.title("📊 Lista SKU")
 
+# — Botón de Cargar Datos —
 if "df" not in st.session_state:
     if st.button("🔄 Cargar Datos"):
         with st.spinner("Descargando y leyendo XLSX…"):
             df = cargar_datos()
             st.session_state.df     = df
             st.session_state.df_fil = df.copy()
-            # inicializa filtros vacíos
-            st.session_state.f1 = ""
-            st.session_state.f2 = ""
-            st.session_state.f3 = ""
+            st.session_state.f1     = ""
+            st.session_state.f2     = ""
+            st.session_state.f3     = ""
         st.success(f"Datos cargados: {len(df)} filas")
-else:
-    # una vez cargados, ocultamos "Cargar Datos" y mostramos "Descargar XLSX original"
+        st.rerun()  # ← fuerza rerender para mostrar filtros y tabla
+
+# — Una vez cargados, mostramos descarga, filtros y tabla —
+if "df" in st.session_state:
+    # — Descargar XLSX original —
     buf2 = io.BytesIO()
     req2 = drive.files().get_media(fileId=FILE_ID)
-    dl2 = MediaIoBaseDownload(buf2, req2)
+    dl2  = MediaIoBaseDownload(buf2, req2)
     done2 = False
     while not done2:
         _, done2 = dl2.next_chunk()
     buf2.seek(0)
-    st.markdown('<div style="text-align:center; margin-bottom:1rem;">', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; margin-bottom:1rem;">',
+                unsafe_allow_html=True)
     st.download_button(
         "📥 Descargar XLSX original",
         data=buf2,
@@ -88,24 +91,27 @@ else:
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # funciones para los botones del formulario
+    # — Funciones de los botones del form —
     def _clear():
-        st.session_state.f1 = ""
-        st.session_state.f2 = ""
-        st.session_state.f3 = ""
-        st.session_state.df_fil = st.session_state.df.copy()
+        st.session_state.f1      = ""
+        st.session_state.f2      = ""
+        st.session_state.f3      = ""
+        st.session_state.df_fil  = st.session_state.df.copy()
 
     def _apply():
-        df = st.session_state.df
-        df_fil = df
-        for txt in (st.session_state.f1, st.session_state.f2, st.session_state.f3):
+        df       = st.session_state.df
+        df_fil   = df
+        for txt in (st.session_state.f1,
+                    st.session_state.f2,
+                    st.session_state.f3):
             if txt:
                 df_fil = df_fil[
-                    df_fil[st.session_state.columna].str.contains(txt, case=False, na=False)
+                    df_fil[st.session_state.columna]
+                        .str.contains(txt, case=False, na=False)
                 ]
         st.session_state.df_fil = df_fil
 
-    # — Formulario de filtros con dos botones en columnas opuestas —
+    # — Formulario de filtros con Aplicar y Limpiar en dos columnas —
     with st.form("filter_form"):
         st.session_state.columna = st.selectbox(
             "Selecciona columna para filtrar",
@@ -121,3 +127,6 @@ else:
 
     # — Mostrar tabla filtrada —
     st.dataframe(st.session_state.df_fil, use_container_width=True)
+
+else:
+    st.info("Pulsa **🔄 Cargar Datos** para empezar.")
