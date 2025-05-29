@@ -153,10 +153,22 @@ if "df" in st.session_state:
     # Limpiar filtros
     b1, b2, b3 = st.columns(3)
     with b2:
+        st.markdown(
+            """
+            <div style="
+            background: #ffadad;         /* rojo pastel */
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            ">
+            """,
+            unsafe_allow_html=True
+        )
         if st.button("🧹 Limpiar filtros", key="clear_btn"):
             for k in ("t1", "t2", "t3"):
                 st.session_state.pop(k, None)
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # Aplicar filtros
     df_filtrado = df
@@ -176,7 +188,8 @@ if "df" in st.session_state:
             "#a8dadc"
         )
         st.markdown(html_orig, unsafe_allow_html=True)
-
+    
+    
     # CSV filtrado en b3
     with b3:
         html_filt = download_link_html(
