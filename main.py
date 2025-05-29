@@ -36,6 +36,7 @@ if not st.session_state.authenticated:
     if not st.session_state.authenticated:
         st.stop()
 
+# Sidebar con información de usuario y botón de logout
 st.sidebar.success(f"👤 Usuario: {st.session_state.user}")
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.authenticated = False
@@ -45,24 +46,20 @@ if st.sidebar.button("Cerrar sesión"):
 # —————————————————————————————————————————
 # LECTURA DE SECRETS PARA GSPREAD & SHEETS
 # —————————————————————————————————————————
-_raw_creds = st.secrets["credentials"]
-# Convierte el SecretManager a dict puro
-creds_dict = dict(_raw_creds)
-# Extrae aquí SCOPES y SPREADSHEET_ID
-SCOPES      = creds_dict.pop("SCOPES")
-SPREADSHEET_ID = creds_dict.pop("SPREADSHEET_ID")
+_raw_creds      = st.secrets["credentials"]
+creds_dict      = dict(_raw_creds)
+SCOPES          = creds_dict.pop("SCOPES")
+SPREADSHEET_ID  = creds_dict.pop("SPREADSHEET_ID")
 
 # —————————————————————————————————————————
 # CLIENTE DE GSPREAD
 # —————————————————————————————————————————
 @st.cache_resource(show_spinner=False)
 def get_gspread_client():
-    # Otra copia para no mutar el original
-    info = dict(creds_dict)
-    # Streamlit a veces agrega espacios alrededor de la llave
+    info = dict(creds_dict)  # copia para no mutar el original
     info["private_key"] = info["private_key"].strip()
-    credentials = Credentials.from_service_account_info(info, scopes=SCOPES)
-    return gspread.authorize(credentials)
+    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+    return gspread.authorize(creds)
 
 # —————————————————————————————————————————
 # CARGAR DATOS DE LA HOJA
@@ -74,10 +71,12 @@ def load_sheet_df(sheet_name: str) -> pd.DataFrame:
     records = ws.get_all_records()
     return pd.DataFrame(records)
 
+# Botón manual para forzar recarga de datos
 if st.button("📥 Cargar y procesar datos desde Google Sheets"):
     load_sheet_df.clear()
     st.success("✅ Datos recargados en memoria.")
 
+# Lectura de la pestaña "LISTA SKU"
 try:
     df_raw = load_sheet_df("LISTA SKU")
 except Exception as e:
@@ -122,8 +121,7 @@ def passes_filters(text):
     t = clean(text)
     return all(f in t for f in (f1,f2,f3) if f)
 
-sel_col     = column_selection
-df_filtered = df[df[sel_col].apply(passes_filters)]
+df_filtered = df[df[column_selection].apply(passes_filters)]
 
 # —————————————————————————————————————————
 # MOSTRAR RESULTADOS
