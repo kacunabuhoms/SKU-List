@@ -82,7 +82,9 @@ if "df" in st.session_state:
         t1 = c1.text_input("Filtro 1", key="f1")
         t2 = c2.text_input("Filtro 2", key="f2")
         t3 = c3.text_input("Filtro 3", key="f3")
-        aplicar, limpiar = st.form_submit_button("Aplicar filtros"), st.form_submit_button("Limpiar filtros")
+        f1, f2 = st.columns(2)
+        aplicar = f1.form_submit_button("Aplicar filtros")
+        limpiar = f2.form_submit_button("Limpiar filtros")
         if limpiar:
             # resetea los filtros y la tabla filtrada
             st.session_state.f1 = ""
