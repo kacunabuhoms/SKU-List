@@ -67,9 +67,11 @@ def get_gspread_client():
 @st.cache_data(show_spinner=False)
 def load_sheet_df(sheet_name: str) -> pd.DataFrame:
     client = get_gspread_client()
-    ws     = client.open_by_key(SPREADSHEET_ID).worksheet(sheet_name)
-    records = ws.get_all_records()
-    return pd.DataFrame(records)
+    # en lugar de open_by_key, usamos open_by_url
+    ws     = client.open_by_url(st.secrets["credentials"]["SHEET_URL"])\
+                   .worksheet(sheet_name)
+    return pd.DataFrame(ws.get_all_records())
+
 
 # Botón manual para forzar recarga de datos
 if st.button("📥 Cargar y procesar datos desde Google Sheets"):
